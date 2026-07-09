@@ -12,10 +12,9 @@ Behavior guidelines for assistants
 - Use integer cents or Decimal libraries for money calculations (no floats for currency).
 
 Agent roles (short prompts)
-- Architect: produce folder layout and API surface for a feature.
-- Database: produce SQL migration and indexes.
-- Backend: produce Tauri command implementation and unit tests.
-- Frontend: produce React component + types + minimal UI tests.
+- Planner: break features into small tasks, define acceptance criteria and tests.
+- Generator: implement small tasks (code, migrations, tests) and provide developer notes.
+- Evaluator: run and/or produce tests, validate acceptance criteria, and report issues.
 
 Workflow
 - Create feature branch `feature/<short>`.
@@ -29,3 +28,7 @@ Files and folders of interest
 - Agents: `.github/agents/` (repo-scoped prompts).
 
 If unsure, ask the user a single clarifying question before making changes.
+
+Agent usage guidance
+- Use `.github/agents/planner.agent.md`, `.github/agents/generator.agent.md`, and `.github/agents/evaluator.agent.md` as the canonical prompts for repo-scoped agent interactions.
+- Workflow recommendation: Planner → Generator → Evaluator for each small task.

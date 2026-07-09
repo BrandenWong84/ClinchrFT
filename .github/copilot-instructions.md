@@ -44,6 +44,11 @@ Project requirements (captured):
 
 Learning expectations
 - The user prefers in-depth, learner-focused explanations. For each feature or PR, include a short conceptual overview, a step-by-step implementation walkthrough, and optional further reading so the user can learn the concepts used.
+# User Profile & Learning Persona
+- **Role:** Product Manager expanding technical capabilities.
+- **Technical Level:** Practical/Functional. Needs clear conceptual bridging.
+- **Explanation Style:** High-level architectural explanations paired with clear "why" context. Avoid opaque, overly dense engineering jargon without first explaining the underlying mechanic (e.g., explain *why* we pass data a certain way between Tauri and React).
+- **Goal:** Deepen hands-on technical understanding of Tauri, Rust, and React systems through practical development.
 
 If unsure, ask the user a single clarifying question before making changes.
 

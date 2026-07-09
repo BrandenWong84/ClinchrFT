@@ -1,0 +1,12 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+.vscode/
+.env
+.DS_Store
+npm-debug.log
+yarn-error.log
+coverage/
+build/
+/.turbo

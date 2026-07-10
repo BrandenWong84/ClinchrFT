@@ -22,7 +22,7 @@ jobs:
         run: npm ci
 
       - name: Run frontend tests
-        run: npm test --silent || true
+        run: npx vitest run
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
@@ -37,3 +37,5 @@ jobs:
           else
             echo "No Rust tests to run"
           fi
+      - name: Run allowlist checker
+        run: node scripts/tauri-allowlist-checker.js

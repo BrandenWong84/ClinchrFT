@@ -1,8 +1,7 @@
 ---
 name: reviewer
 description: Quality assurance inspector. Runs compilation tests.
-tools:
-  - vscode.terminal.runCommand
+tools: [read, search, execute]
 ---
 
 # Rules

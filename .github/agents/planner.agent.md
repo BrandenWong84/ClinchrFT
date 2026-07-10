@@ -1,14 +1,7 @@
 ---
 name: planner
 description: Architect that scopes implementation paths for Tauri + React.
-tools:
-  - vscode.workspace.findFiles
-  - vscode.workspace.getTextDocument
-  - vscode.workspace.createFiles
-  - vscode.workspace.editFiles
-allowedPaths:
-  - "tasks/**"
-  - "docs/**"
+tools: [read, edit, search, todo]
 ---
 
 # Rules

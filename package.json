@@ -6,11 +6,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "tauri": "tauri dev",
+    "tauri:build": "tauri build"
   },
   "devDependencies": {
     "@testing-library/react": "^14.0.0",
-    "@vitejs/plugin-react": "^4.0.0",
+    "@tauri-apps/cli": "^2.3.0",
+    "@vitejs/plugin-react": "^5.0.0",
     "esbuild": "^0.28.1",
     "typescript": "^5.0.0",
     "vite": "^8.1.4",

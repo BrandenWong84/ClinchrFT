@@ -1,0 +1,17 @@
+[package]
+name = "clinchrft-tauri"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tauri = { version = "^1.2", features = ["api-all"] }
+rusqlite = { version = "^0.29", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+anyhow = "^1.0"
+directories = "^5.0"
+
+[dev-dependencies]
+tempfile = "^3.3"
+
+[build-dependencies]
+tauri-build = { version = "^1.2" }

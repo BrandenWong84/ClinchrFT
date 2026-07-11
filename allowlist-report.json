@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-07-10T21:30:20.182Z",
+  "frontendUses": [
+    "invoke",
+    "@tauri-api"
+  ],
+  "frontendModules": [
+    "tauri"
+  ],
+  "frontendModulesMapped": [
+    "invoke"
+  ],
+  "rustUses": [
+    "tauri_command"
+  ],
+  "commandNames": [
+    "get_transactions",
+    "get_accounts",
+    "get_categories",
+    "get_app_path"
+  ],
+  "tauriAllowlist": {
+    "all": false
+  },
+  "allowAll": false
+}

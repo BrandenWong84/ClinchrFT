@@ -4,14 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tauri = { version = "^1.2", features = ["api-all"] }
+tauri = { version = "2", features = [] }
 rusqlite = { version = "^0.29", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 anyhow = "^1.0"
 directories = "^5.0"
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 tempfile = "^3.3"
 
 [build-dependencies]
-tauri-build = { version = "^1.2" }
+tauri-build = { version = "2", features = [] }

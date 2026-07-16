@@ -3,15 +3,17 @@ import react from '@vitejs/plugin-react'
 
 export default () =>
   defineConfig({
-    root: 'public',
     plugins: [react()],
     server: {
       watch: {
         ignored: ['**/src-tauri/target/**']
+      },
+      fs: {
+        allow: ['..']
       }
     }
     ,
     test: {
-      include: ['../tests/**/*.{test,spec}.{ts,tsx,js,jsx}']
+      include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}']
     }
   })

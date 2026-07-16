@@ -1,26 +1,49 @@
-use serde::Serialize;
 use tauri::command;
+use std::path::PathBuf;
 
-#[derive(Serialize)]
-pub struct TransactionStub {
-    pub id: String,
-    pub account_id: String,
-    pub category_id: Option<String>,
-    pub amount_cents: i64,
-    pub memo: Option<String>,
-    pub date: String,
+use crate::db::{open_db, CreateTransaction, UpdateTransaction, TransactionRow};
+
+fn db_path() -> PathBuf {
+    // Allow tests or CI to override the DB path by setting CLINCHRFT_DB_PATH.
+    if let Some(p) = std::env::var_os("CLINCHRFT_DB_PATH") {
+        return PathBuf::from(p);
+    }
+
+    let proj_dirs = directories::ProjectDirs::from("com", "example", "ClinchrFT").unwrap();
+    let data_dir = proj_dirs.data_dir();
+    std::fs::create_dir_all(data_dir).ok();
+    data_dir.join("clinchrft.db")
 }
 
 #[command]
-pub fn get_transactions() -> Vec<TransactionStub> {
-    vec![TransactionStub {
-        id: "1".into(),
-        account_id: "a1".into(),
-        category_id: Some("c1".into()),
-        amount_cents: 12345,
-        memo: Some("Coffee".into()),
-        date: "2026-07-01".into(),
-    }]
+pub fn get_transactions() -> Result<Vec<TransactionRow>, String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    crate::db::get_transactions(&conn).map_err(|e| format!("DB query error: {}", e))
+}
+
+#[command]
+pub fn create_transaction(tx: CreateTransaction) -> Result<TransactionRow, String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    crate::db::insert_transaction(&conn, tx).map_err(|e| format!("DB insert error: {}", e))
+}
+
+#[command]
+pub fn update_transaction(id: String, tx: UpdateTransaction) -> Result<TransactionRow, String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    match crate::db::update_transaction(&conn, &id, tx).map_err(|e| format!("DB update error: {}", e))? {
+        Some(row) => Ok(row),
+        None => Err("not found".into()),
+    }
+}
+
+#[command]
+pub fn delete_transaction(id: String) -> Result<(), String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    crate::db::delete_transaction(&conn, &id).map_err(|e| format!("DB delete error: {}", e))
 }
 
 #[command]
@@ -37,4 +60,47 @@ pub fn get_categories() -> Vec<(String, String)> {
 pub fn get_app_path() -> String {
     let proj_dirs = directories::ProjectDirs::from("com", "example", "ClinchrFT").unwrap();
     proj_dirs.data_dir().to_string_lossy().to_string()
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn commands_roundtrip_via_override_path() {
+        // Create a temporary file path and point commands at it.
+        let tmp = NamedTempFile::new().expect("tempfile");
+        std::env::set_var("CLINCHRFT_DB_PATH", tmp.path().to_string_lossy().to_string());
+
+        // Create a transaction via the command wrapper.
+        let created = create_transaction(CreateTransaction {
+            account_id: "a1".into(),
+            category_id: Some("c1".into()),
+            amount_cents: 200,
+            memo: Some("roundtrip".into()),
+            date: "2026-07-02".into(),
+        })
+        .expect("create failed");
+
+        // Update amount via the command wrapper.
+        let updated = update_transaction(
+            created.id.clone(),
+            UpdateTransaction {
+                account_id: None,
+                category_id: None,
+                amount_cents: Some(250),
+                memo: None,
+                date: None,
+            },
+        )
+        .expect("update failed");
+        assert_eq!(updated.amount_cents, 250);
+
+        // Delete and confirm removal.
+        delete_transaction(created.id.clone()).expect("delete failed");
+        let all = get_transactions().expect("get failed");
+        assert!(all.iter().all(|r| r.id != created.id));
+    }
 }

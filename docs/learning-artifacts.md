@@ -1,5 +1,33 @@
 ---
 
+Change: Make `tauri-api` dev-safe with localStorage mock fallback
+- One-paragraph summary:
+	- Replaced the static `@tauri-apps/api/core` usage in `src/services/tauri-api.ts` with a runtime-detected wrapper. When Tauri is present the code dynamically imports and calls `invoke(...)`. When Tauri is absent (browser/dev) and not in production, a lightweight mock backed by `localStorage` provides transactions/accounts/categories so the UI runs without uncaught `invoke` errors.
+- Line-by-line explanation:
+	- `isTauriAvailable()`: feature-detects the Tauri runtime via `window.__TAURI_INTERNALS__` safely.
+	- Dynamic `import('@tauri-apps/api/core')`: performed only when Tauri is available to avoid module runtime errors in browsers.
+	- Dev mock (`localStorage`): implements CRUD for transactions and persists to `localStorage` under the key `clinchrft:mock:db_v1` so frontend flows (Add Transaction, list) work in `npm run dev`.
+	- Production safety: when `process.env.NODE_ENV === 'production'` and Tauri is absent, the API returns safe defaults or throws where appropriate to avoid silently masking errors in packaged apps.
+- How to run and test locally (commands):
+
+```powershell
+# Frontend-only dev server
+npm run dev
+# Open http://localhost:5173 in your browser and use the Transactions page — console should show no uncaught Tauri errors
+
+# Run unit tests (Vitest)
+npm test
+```
+- Suggested follow-up learning items or references:
+	- Read about dynamic imports in ES modules and how bundlers handle them.
+	- Review Tauri runtime internals and `@tauri-apps/api` behavior on import.
+	- Consider adding a pluggable provider pattern (DI) to swap mocks and real providers more cleanly.
+- Implementation TODOs / Reviewer handoff:
+	- Verify `npm run dev` opens in the browser and the Transactions page allows creating transactions (persisted to `localStorage`).
+	- Run `npm test` and confirm `tests/tauri-api.test.ts` passes in both mocked Tauri and non-Tauri scenarios.
+	- If desired, extend the mock to emulate server-side validation or to seed more realistic sample data for developer demos.
+
+
 Change: Add `build.devPath` to `src-tauri/tauri.conf.json` to enable `tauri dev`
 - One-paragraph summary:
 	- Added `build.devPath` pointing at the running Vite dev server (`http://localhost:5173`) so `tauri dev` uses the live dev server instead of requiring an on-disk `dist` folder. This prevents `tauri::generate_context!()` from panicking when `build.frontendDist` (`../dist`) is absent during development.
@@ -785,4 +813,165 @@ curl -I http://localhost:5173/
 	3. Run `npm install` (or `npm install -D @vitejs/plugin-react` if needed) and run the validation scripts above.
 	4. Attach `tauri-dev.log` showing successful 200/app load to the PR.
 	5. Ask `@reviewer` to run the acceptance checklist and CI checks.
+
+	---
+
+	Change: Serve repository root for Vite dev (move `index.html` to repo root)
+	- One-paragraph summary:
+		- Reverted the Vite dev `root` change that served `public` as the project root. Instead, `index.html` is now at the repository root and Vite serves the repo root (the default). This makes module imports canonical (`/src/main.tsx`), avoids `/@fs`-style imports, and prevents fragile filesystem workarounds on Windows.
+	- Line-by-line explanation:
+		- `vite.config.js`: removed `root: 'public'` so Vite uses the repo root. Kept `server.watch.ignored` for `**/src-tauri/target/**` and the `test.include` glob to ensure Vitest discovers tests.
+		- `index.html` moved from `public/index.html` to `index.html` at repo root. The `<script>` now loads `/src/main.tsx` (module path resolved by Vite) instead of a `../src/main.tsx` or `/@fs/...` hack.
+		- `public/` remains as the static `publicDir` for icons and other static assets; Vite will still serve files from `public/` at the root path.
+	- How to run and test locally (commands):
+
+	```powershell
+	# create branch and move file (example steps used when applying patch locally)
+	git checkout -b feature/fix-vite-root
+	git mv public/index.html index.html
+	# install deps and start dev server
+	npm ci
+	npm run dev
+	# in another shell, confirm module serving
+	curl.exe -i http://localhost:5173/src/main.tsx
+	```
+
+	- Expected outcome / acceptance criteria:
+		- `curl -i http://localhost:5173/src/main.tsx` returns the module source (`Content-Type: application/javascript`) not `index.html`.
+		- Browser DevTools shows no MIME or module-load errors for `main.tsx`.
+		- `npm test` still discovers tests and passes.
+		- `npm run dev` serves static assets from `public/` as before.
+
+	- Suggested follow-up learning items or references:
+		- Read Vite docs on `root` and `publicDir`: https://vitejs.dev/config/
+		- Understand Vite's `/@fs` pseudo-prefix and why avoiding it reduces platform-specific issues.
+
+	- Implementation TODOs / reviewer handoff:
+		1. Verify `index.html` at repo root references `/src/main.tsx`.
+		2. Run the commands above and confirm the acceptance criteria.
+		3. If CI or packaging scripts assumed `public/index.html`, update them to point at the repo-root `index.html` or adjust build steps accordingly.
+
+	---
+
+	Change: Fix Vitest test discovery after reverting Vite root to repository root
+	- One-paragraph summary:
+		- Updated `vite.config.js` `test.include` to use a repo-root relative glob so Vitest discovers tests under the repository `tests/` directory when Vite's dev root is the repository root. This prevents `No test files found` errors that occur when the glob points outside the repository.
+	- Line-by-line explanation:
+		- `vite.config.js` `test.include`: now `tests/**/*.{test,spec}.{ts,tsx,js,jsx}`, which is resolved from the project root where Vitest runs.
+	- How to run and test locally (commands):
+
+	```powershell
+	npm ci
+	npm test
+	```
+
+	- Expected outcome:
+		- Vitest discovers and runs tests in `tests/` and exits with code 0 when tests pass.
+	- Reviewer next steps / handoff:
+		- Pull the branch with the `vite.config.js` change, run `npm test`, and confirm tests are discovered and executed. If discovery still fails, check for alternative Vitest config in `package.json` or environment overrides.
+
+---
+
+Change: Tauri detection fix in `src/services/tauri-api.ts`
+- One-paragraph summary:
+		- Strengthened the runtime detection for the Tauri bridge in `src/services/tauri-api.ts` so tests and browser dev runs do not throw when `window` is undefined (e.g., Node test environments). The change checks `window` when present, otherwise falls back to `globalThis`, and safely reads `__TAURI_INTERNALS__`.
+- Line-by-line explanation:
+		- `isTauriAvailable()`: now does `const g: any = (typeof window !== 'undefined') ? window : globalThis` so the code does not reference `window` in Node-like runtimes where it is undefined. Then it checks `typeof g.__TAURI_INTERNALS__ !== 'undefined'` to detect Tauri.
+		- This avoids importing `@tauri-apps/api/core` in non-Tauri environments and makes unit tests that mock Tauri behavior more reliable.
+- How to run and test locally (commands):
+
+```powershell
+# Create feature branch
+git checkout -b feature/tauri-detection-fix
+
+# Run unit tests (Vitest)
+npm test
+
+# Sanity-check dev server
+npm run dev
+# open http://localhost:5173 and visit the Transactions page
+```
+
+- Suggested follow-up learning items or references:
+		- Read about `globalThis` vs `window` in cross-platform JS environments.
+		- Review Vitest/Node environment differences and how to mock browser globals in tests.
+
+- Implementation TODOs / Reviewer handoff:
+		- Verify `npm test` passes including `tests/tauri-api.test.ts` and the test "forwards to Tauri invoke when available" succeeds.
+		- Confirm `npm run dev` shows no uncaught Tauri-related console errors and the Transactions UI functions using the localStorage mock when Tauri is absent.
+
+Engineer instructions (apply + verify) — copy into the new engineer session:
+1. Create a branch:
+
+```bash
+git checkout -b feature/tauri-detection-fix
+```
+2. Edit `src/services/tauri-api.ts` and replace the `isTauriAvailable()` implementation with:
+
+```ts
+function isTauriAvailable(): boolean {
+	try {
+		const g: any = (typeof window !== 'undefined') ? window : globalThis
+		return typeof g.__TAURI_INTERNALS__ !== 'undefined'
+	} catch (e) {
+		return false
+	}
+}
+```
+3. Run unit tests:
+
+```bash
+npm test
+```
+Expect: all tests pass (including `tauri-api.test.ts`).
+4. Sanity-check dev server:
+
+```bash
+npm run dev
+# open http://localhost:5173 and verify Transactions UI works without Tauri errors
+```
+5. Commit and open PR:
+
+```bash
+git add src/services/tauri-api.ts
+git commit -m "feat(tauri-api): detect Tauri on window or globalThis (fix test env)"
+git push --set-upstream origin feature/tauri-detection-fix
+```
+
+Acceptance criteria:
+- `npm test` passes.
+- The failing test "forwards to Tauri invoke when available" succeeds (mock called).
+- Browser dev server still works with localStorage mock when Tauri is absent.
+
+Reviewer handoff:
+- Ask `@engineer` to apply the small change above in a fresh session and run the commands in steps 3–5. Attach test output if any failures occur.
+
+---
+
+Change: Export `isTauriAvailable()` and add focused detection tests
+- One-paragraph summary:
+	- Exported the runtime-detection helper `isTauriAvailable()` from `src/services/tauri-api.ts` and added focused unit tests in `tests/tauri-api.test.ts` to validate Tauri detection when `globalThis.__TAURI_INTERNALS__` or `window.__TAURI_INTERNALS__` is present. This makes the detection logic directly testable and prevents environment-specific import failures.
+- Line-by-line explanation:
+	- `isTauriAvailable()` (`src/services/tauri-api.ts`): returns true when either `globalThis.__TAURI_INTERNALS__` or `window.__TAURI_INTERNALS__` is defined; wrapped in try/catch for safety in constrained runtimes.
+	- Tests (`tests/tauri-api.test.ts`): added four tests — two that assert `getTransactions()` forwards to the mocked `invoke` when detection points are present, and two that import the module and call `isTauriAvailable()` directly to assert it returns `true` in those scenarios. Adjusted mock reset to use `mockInvoke.mockReset()` so the `vi.mock` factory keeps a stable function reference across dynamic imports.
+- How to run and test locally (commands):
+
+```powershell
+npm ci
+npm test
+```
+
+- Suggested follow-up learning items or references:
+	- Vitest mocking and `vi.mock` behavior with dynamic `import()`.
+	- Cross-environment globals: `globalThis` vs `window` and implications for Node test environments.
+
+- Reviewer checklist / handoff to `@reviewer`:
+	- Pull the branch and run `npm ci` and `npm test` — expect all tests to pass.
+	- Confirm the new tests exist in [tests/tauri-api.test.ts](tests/tauri-api.test.ts#L1-L200) and behave as described.
+	- Inspect [src/services/tauri-api.ts](src/services/tauri-api.ts#L1) to verify `isTauriAvailable()` is exported and its implementation is resilient to missing `window`.
+	- Verify the test mock setup uses `mockInvoke.mockReset()` (not reassigning the mock) in `beforeEach` so the mocked `invoke` remains the same function reference.
+	- Optional: add a negative test asserting `isTauriAvailable()` returns `false` when neither marker is present.
+
+---
+
 

@@ -16,3 +16,4 @@
 - [ ] Tests added/updated
 - [ ] Documentation updated
 - [ ] CI is passing
+ - [ ] tauri allowlist updated & justified (required if Tauri/native APIs added)

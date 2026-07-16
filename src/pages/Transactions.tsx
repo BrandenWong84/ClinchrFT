@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
-import type { Transaction } from '../types'
-import { getTransactions, createTransaction, updateTransaction, deleteTransaction } from '../services/tauri-api'
-import TransactionList from '../components/TransactionList'
-import TransactionForm from '../components/TransactionForm'
+import type { Transaction } from '../types/index.js'
+import { getTransactions, createTransaction, updateTransaction, deleteTransaction } from '../services/tauri-api.js'
+import TransactionList from '../components/TransactionList.js'
+import TransactionForm from '../components/TransactionForm.js'
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])

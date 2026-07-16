@@ -2,6 +2,7 @@
   "name": "clinchrft",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -9,11 +10,12 @@
     "test": "vitest",
     "tauri": "tauri dev",
     "tauri:build": "tauri build",
-    "validate:tauri-conf": "node scripts/validate-tauri-conf.js"
+    "validate:tauri-conf": "node scripts/validate-tauri-conf.cjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/react": "^14.0.0",
+    "@types/node": "^26.1.1",
     "@vitejs/plugin-react": "^5.0.0",
     "esbuild": "^0.28.1",
     "typescript": "^5.0.0",

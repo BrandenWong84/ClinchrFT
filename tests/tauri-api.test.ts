@@ -33,14 +33,14 @@ describe('tauri-api (dev-safe wrapper)', () => {
 
   it('works in browser when Tauri is absent (uses mock)', async () => {
     delete (globalThis as any).__TAURI_INTERNALS__
-    const api = await import('../src/services/tauri-api')
+    const api = await import('../src/services/tauri-api.js')
     const txs = await api.getTransactions()
     expect(Array.isArray(txs)).toBe(true)
 
     const created = await api.createTransaction({
-      amount: 100,
+      amountCents: 100,
       date: '2026-01-01',
-      description: 'test',
+      memo: 'test',
       accountId: 'a',
       categoryId: 'c'
     })
@@ -53,18 +53,18 @@ describe('tauri-api (dev-safe wrapper)', () => {
   it('forwards to Tauri invoke when available', async () => {
     ;(globalThis as any).__TAURI_INTERNALS__ = {}
     mockInvoke.mockImplementation(async (cmd: string, args?: any) => {
-      if (cmd === 'get_transactions') return [{ id: '1', amount: 50, date: '2026-01-02', description: 'x', accountId: 'a', categoryId: 'c' }]
+      if (cmd === 'get_transactions') return [{ id: '1', amountCents: 50, date: '2026-01-02', memo: 'x', accountId: 'a', categoryId: 'c' }]
       if (cmd === 'create_transaction') return { ...args.tx, id: '2' }
       return null
     })
 
-    const api = await import('../src/services/tauri-api')
+    const api = await import('../src/services/tauri-api.js')
 
     const txs = await api.getTransactions()
     expect(mockInvoke).toHaveBeenCalledWith('get_transactions')
     expect(txs.length).toBe(1)
 
-    const created = await api.createTransaction({ amount: 1, date: '2026-01-03', description: 'y', accountId: 'a', categoryId: 'c' })
+    const created = await api.createTransaction({ amountCents: 1, date: '2026-01-03', memo: 'y', accountId: 'a', categoryId: 'c' })
     expect(mockInvoke).toHaveBeenCalledWith('create_transaction', { tx: expect.any(Object) })
     expect(created.id).toBe('2')
   })
@@ -73,11 +73,11 @@ describe('tauri-api (dev-safe wrapper)', () => {
     delete (globalThis as any).window
     ;(globalThis as any).__TAURI_INTERNALS__ = {}
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === 'get_transactions') return [{ id: 'g', amount: 1, date: '2026-01-01', description: 'g', accountId: 'a', categoryId: 'c' }]
+      if (cmd === 'get_transactions') return [{ id: 'g', amountCents: 1, date: '2026-01-01', memo: 'g', accountId: 'a', categoryId: 'c' }]
       return null
     })
 
-    const api = await import('../src/services/tauri-api')
+    const api = await import('../src/services/tauri-api.js')
     const txs = await api.getTransactions()
     expect(mockInvoke).toHaveBeenCalledWith('get_transactions')
     expect(txs.length).toBe(1)
@@ -87,11 +87,11 @@ describe('tauri-api (dev-safe wrapper)', () => {
     ;(globalThis as any).window = { __TAURI_INTERNALS__: {} }
     delete (globalThis as any).__TAURI_INTERNALS__
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === 'get_transactions') return [{ id: 'w', amount: 2, date: '2026-01-02', description: 'w', accountId: 'a', categoryId: 'c' }]
+      if (cmd === 'get_transactions') return [{ id: 'w', amountCents: 2, date: '2026-01-02', memo: 'w', accountId: 'a', categoryId: 'c' }]
       return null
     })
 
-    const api = await import('../src/services/tauri-api')
+    const api = await import('../src/services/tauri-api.js')
     const txs = await api.getTransactions()
     expect(mockInvoke).toHaveBeenCalledWith('get_transactions')
     expect(txs.length).toBe(1)
@@ -100,21 +100,21 @@ describe('tauri-api (dev-safe wrapper)', () => {
   it('isTauriAvailable returns true when only globalThis.__TAURI_INTERNALS__ is present', async () => {
     delete (globalThis as any).window
     ;(globalThis as any).__TAURI_INTERNALS__ = {}
-    const api = await import('../src/services/tauri-api')
+    const api = await import('../src/services/tauri-api.js')
     expect(api.isTauriAvailable()).toBe(true)
   })
 
   it('isTauriAvailable returns true when only window.__TAURI_INTERNALS__ is present', async () => {
     ;(globalThis as any).window = { __TAURI_INTERNALS__: {} }
     delete (globalThis as any).__TAURI_INTERNALS__
-    const api = await import('../src/services/tauri-api')
+    const api = await import('../src/services/tauri-api.js')
     expect(api.isTauriAvailable()).toBe(true)
   })
 
   it('isTauriAvailable returns false when neither marker is present', async () => {
     delete (globalThis as any).window
     delete (globalThis as any).__TAURI_INTERNALS__
-    const api = await import('../src/services/tauri-api')
+    const api = await import('../src/services/tauri-api.js')
     expect(api.isTauriAvailable()).toBe(false)
   })
 })

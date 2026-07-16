@@ -1,4 +1,4 @@
-import type { Transaction, Account, Category } from '../types'
+import type { Transaction, Account, Category } from '../types/index.js'
 
 const MOCK_KEY = 'clinchrft:mock:db_v1'
 

@@ -20,7 +20,7 @@ test('checker detects frontend modules and rust commands', () => {
   fs.mkdirSync(path.join(tmp, 'src-tauri'), { recursive: true })
   fs.writeFileSync(path.join(tmp, 'src-tauri', 'tauri.conf.json'), JSON.stringify(tauriConf, null, 2))
 
-  const script = path.join(__dirname, '..', 'scripts', 'tauri-allowlist-checker.js')
+  const script = path.join(__dirname, '..', 'scripts', 'tauri-allowlist-checker.cjs')
   cp.execFileSync(process.execPath, [script], { env: Object.assign({}, process.env, { CLINCHRFT_REPO_ROOT: tmp }), stdio: 'inherit' })
 
   const report = JSON.parse(fs.readFileSync(path.join(tmp, 'allowlist-report.json'), 'utf8'))

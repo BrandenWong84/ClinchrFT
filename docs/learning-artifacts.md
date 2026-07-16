@@ -244,6 +244,98 @@ node scripts/tauri-allowlist-checker.js
 
 ---
 
+Change: Migrate repository to strict ESM alignment (TypeScript + Node)
+- One-paragraph summary:
+	- Updated TypeScript and Node runtime resolution to ESM-friendly settings to improve forward compatibility: `tsconfig.json` now uses `module: ESNext` and `moduleResolution: nodeNext`; `package.json` is set to `type: "module"`. Node-only tooling scripts that rely on CommonJS were converted to `.cjs` to preserve runtime behavior.
+- Line-by-line explanation:
+	- `tsconfig.json`: `module` → `ESNext` enables emitting modern ES module syntax; `moduleResolution` → `nodeNext` aligns TypeScript resolution with Node's ESM semantics.
+	- `package.json`: adding `type: "module"` tells Node to treat `.js` files as ESM by default; to keep existing CommonJS scripts working we added `.cjs` variants for Node tooling.
+	- `scripts/*.cjs`: created `scripts/tauri-allowlist-checker.cjs` and `scripts/validate-tauri-conf.cjs` (copies of the previous CommonJS code) so `node` can execute them unchanged even with `type: "module"` set.
+	- `tests/checker.test.js`: updated to call the new `.cjs` script path.
+	- `.github/workflows/ci.yml`: pinned Node to `18` and updated the allowlist checker step to call the `.cjs` script.
+- How to run and test locally (commands):
+
+```powershell
+git checkout -b feature/es-module-migration
+npm ci
+npx tsc --noEmit
+npm test
+node scripts/tauri-allowlist-checker.cjs
+node scripts/validate-tauri-conf.cjs
+```
+
+- Suggested follow-up learning items or references:
+	- Read Node ESM docs and TypeScript `moduleResolution: nodeNext` guidance.
+	- Review the tradeoffs of `type: "module"` vs per-file `.mjs`/`.cjs` strategies.
+	- If additional Node scripts are present, review each for CommonJS `require` usage and either convert to ESM or add `.cjs` wrappers.
+- Implementation TODOs / Reviewer handoff:
+	- Run `npx tsc --noEmit` and ensure no compile errors.
+	- Run `npm test` (Vitest) and confirm tests pass under the new config.
+	- Inspect other repository docs and CI references for `scripts/tauri-allowlist-checker.js` and update to `.cjs` where appropriate.
+	- Review whether `vite`/`vitest` config needs `deps.inline` adjustments for ESM interop; if tests report resolution errors, add `test: { deps: { inline: [] } }` to `vite.config.ts`.
+
+
+---
+
+Change: Align tests and TypeScript config with `Transaction` type
+- One-paragraph summary:
+	- Updated test fixtures in `tests/tauri-api.test.ts` to use `amountCents` and `memo` (matching `src/types/index.ts`) and updated `tsconfig.json` to use `moduleResolution: node16` so the TypeScript compiler uses a modern Node resolution strategy and avoids deprecation warnings.
+- Line-by-line explanation:
+	- `tests/tauri-api.test.ts`: replaced object literals and mocked Tauri responses that used `amount` → `amountCents` and `description` → `memo` so fixtures conform to the `Transaction` interface (`amountCents: number`, `memo?: string`).
+	- `tsconfig.json`: changed `moduleResolution` from `node` to `node16` to align with current Node module resolution semantics (improves ESM interop and removes deprecation warnings about `node` resolution mode).
+- How to run and test locally (commands):
+
+```powershell
+npm ci
+npx tsc --noEmit
+npm test
+```
+
+- Expected outcomes:
+	- `npx tsc --noEmit` should report no type errors related to the `Transaction` fixtures.
+	- `npm test` should run the Vitest suite and pass the modified `tauri-api.test.ts` scenarios.
+- Suggested follow-up learning items:
+	- Review the `Transaction` type at [src/types/index.ts](src/types/index.ts#L1-L7) and prefer `amountCents` for monetary values to avoid floating-point errors.
+	- Read TypeScript's `moduleResolution` docs and Node's ESM/CJS resolution differences.
+- Implementation TODOs / Reviewer handoff:
+	- Verify the tests pass locally on Windows using the commands above.
+	- Confirm there are no remaining fixtures in other test files using `amount`/`description` (search for `amount:` across `tests/`).
+	- Open a PR titled `fix(tests): align transaction fixture fields with Transaction type` and include these verification steps in the PR body.
+
+**Reviewer Handoff — Test & TSConfig Fixes**
+
+- **Summary:** Updated tests to use `amountCents` and `memo` to match `src/types/index.ts`, and set TypeScript to modern Node resolution (`moduleResolution: node16`, `module: Node16`) with ESM-compatible dynamic imports adjusted in tests.
+- **Files changed:** `tests/tauri-api.test.ts`, `tsconfig.json`, `docs/learning-artifacts.md` (this file).
+- **Why:** Fix TypeScript errors caused by mismatched fixture fields and remove deprecated moduleResolution warnings while keeping ESM-compatible imports.
+- **How to verify (commands):**
+
+```powershell
+npm ci
+npx tsc --noEmit
+npm test
+```
+
+- **Expected results:**
+	- `npx tsc --noEmit` exits with no errors.
+	- `npm test` passes (Vitest report shows all tests green).
+
+- **Reviewer checklist:**
+	- **Run types:** execute `npx tsc --noEmit` and confirm no errors.
+	- **Run tests:** execute `npm test` and confirm all tests pass.
+	- **Search fixtures:** inspect repo for any remaining test fixtures using `amount:` or `description:` and update to `amountCents`/`memo` as needed.
+	- **PR review:** confirm commit messages and PR title match the suggested naming and include the verification steps.
+
+- **Notes for reviewer:**
+	- When reviewing the PR, ensure `tests/tauri-api.test.ts` dynamic imports include the `.js` extension for Node16 resolution; this is an intentional ESM-compatible change.
+	- If the project prefers `module: "ESNext"` for other reasons, consider switching to `moduleResolution: "nodeNext"` instead of `node16` and adapt imports accordingly — discuss tradeoffs in PR comments.
+
+- **Follow-up tasks (optional):**
+	- Grep the codebase for `description:` and `amount:` outside tests to identify any runtime code that still expects the old keys.
+	- Add a small Vitest unit test that asserts the `tauri-api` dev mock and the Tauri invoke wrapper both produce objects matching `src/types/index.ts` to prevent regressions.
+
+
+---
+
 Change: Fix Vitest test discovery when `vite.config.js` sets `root: 'public'`
 - One-paragraph summary:
 	- Added an explicit `test` section to `vite.config.js` that tells Vitest where to find test files. When Vite's `root` is changed to `public`, Vitest inherits that root and fails to discover tests located in the repository `tests/` folder. The `test.include` option ensures tests under `tests/` are discovered regardless of Vite's `root` setting.

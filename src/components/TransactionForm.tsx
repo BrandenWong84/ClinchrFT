@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import type { Transaction } from '../types'
-import { dollarsToCents, centsToDollars } from '../lib/money'
+import type { Transaction } from '../types/index.js'
+import { dollarsToCents, centsToDollars } from '../lib/money.js'
 
 type Props = {
   initial?: Partial<Transaction>

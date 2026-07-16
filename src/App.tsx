@@ -1,5 +1,5 @@
 import React from 'react'
-import TransactionsPage from './pages/Transactions'
+import TransactionsPage from './pages/Transactions.js'
 
 export default function App() {
   return (

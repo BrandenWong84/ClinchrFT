@@ -1,7 +1,7 @@
 use tauri::command;
 use std::path::PathBuf;
 
-use crate::db::{open_db, CreateTransaction, UpdateTransaction, TransactionRow};
+use crate::db::{open_db, CreateTransaction, UpdateTransaction, TransactionRow, AccountRow, CategoryRow};
 
 fn db_path() -> PathBuf {
     // Allow tests or CI to override the DB path by setting CLINCHRFT_DB_PATH.
@@ -47,13 +47,17 @@ pub fn delete_transaction(id: String) -> Result<(), String> {
 }
 
 #[command]
-pub fn get_accounts() -> Vec<(String, String)> {
-    vec![("a1".into(), "Checking".into())]
+pub fn get_accounts() -> Result<Vec<AccountRow>, String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    crate::db::get_accounts(&conn).map_err(|e| format!("DB query error: {}", e))
 }
 
 #[command]
-pub fn get_categories() -> Vec<(String, String)> {
-    vec![("c1".into(), "Food".into())]
+pub fn get_categories() -> Result<Vec<CategoryRow>, String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    crate::db::get_categories(&conn).map_err(|e| format!("DB query error: {}", e))
 }
 
 #[command]
@@ -74,10 +78,16 @@ mod tests {
         let tmp = NamedTempFile::new().expect("tempfile");
         std::env::set_var("CLINCHRFT_DB_PATH", tmp.path().to_string_lossy().to_string());
 
+        // Create parent rows in the DB so FK constraints are satisfied.
+        let path = std::env::var("CLINCHRFT_DB_PATH").unwrap();
+        let conn = crate::db::open_db(std::path::Path::new(&path)).expect("open db");
+        let acc = crate::db::insert_account(&conn, "test-account", None).expect("insert acc");
+        let cat = crate::db::insert_category(&conn, "test-category", None, None).expect("insert cat");
+
         // Create a transaction via the command wrapper.
         let created = create_transaction(CreateTransaction {
-            account_id: "a1".into(),
-            category_id: Some("c1".into()),
+            account_id: Some(acc.id.clone()),
+            category_id: Some(cat.id.clone()),
             amount_cents: 200,
             memo: Some("roundtrip".into()),
             date: "2026-07-02".into(),

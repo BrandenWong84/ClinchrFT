@@ -1,6 +1,6 @@
 export interface Transaction {
   id: string
-  accountId: string
+  accountId?: string
   categoryId?: string
   amountCents: number
   memo?: string

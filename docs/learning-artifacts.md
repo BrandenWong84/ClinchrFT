@@ -1,4 +1,65 @@
 ---
+Change: Fix tests and make frontend accept nullable account/category
+- One-paragraph summary:
+	- Adjusted backend tests to create required `accounts` and `categories` before inserting `transactions` so SQLite FK constraints (with `ON DELETE SET NULL`) pass in tests. Updated frontend TypeScript types and UI so `accountId` and `categoryId` are optional; the `TransactionForm` allows empty selection and converts empty strings to `undefined` on submit; the `Transactions` page resolves account/category names and displays `Unassigned / Deleted` when a reference is missing or soft-deleted.
+- Line-by-line explanation:
+	- `src-tauri/src/db.rs` (tests): `crud_roundtrip` now calls `insert_account` and `insert_category` to create parent rows, then inserts a transaction using their IDs.
+	- `src-tauri/src/commands.rs` (tests): test now opens the temp DB, inserts an account and category, then creates a transaction using those IDs.
+	- `src/types/index.ts`: made `Transaction.accountId` optional.
+	- `src/components/TransactionForm.tsx`: removed `required` from account input and converted empty strings to `undefined` when submitting.
+	- `src/pages/Transactions.tsx`: loads `accounts` and `categories`, builds maps, and passes them to `TransactionList`.
+	- `src/components/TransactionList.tsx`: added `Account` and `Category` columns; resolves names via provided maps and displays `Unassigned / Deleted` when appropriate.
+- How to run and test locally (commands):
+
+```powershell
+# Rust tests
+cd src-tauri
+cargo test
+
+# TypeScript checks and frontend tests (repo root)
+npx tsc --noEmit
+npm test
+```
+- Suggested follow-up learning items or references:
+	- Review how SQLite enforces foreign keys and the interaction of `ON DELETE SET NULL` with soft-deletes.
+	- Consider replacing free-text account/category inputs with `<select>` elements listing current accounts/categories plus an explicit `Unassigned` option.
+- Implementation TODOs / Reviewer handoff:
+	- Run `cargo test` and confirm all Rust tests pass.
+	- Run `npx tsc --noEmit` and `npm test` to confirm frontend typechecks and tests pass.
+	- Manually verify Transactions page shows `Unassigned / Deleted` for null/missing account/category and that TransactionForm can save transactions without an account.
+Change: Add Accounts & Categories CRUD (soft-delete + ON DELETE SET NULL)
+- One-paragraph summary:
+	- Implemented backend CRUD helpers for `accounts` and `categories` in `src-tauri/src/db.rs`, exposed corresponding Tauri commands in `src-tauri/src/commands.rs`, and updated the runtime migrations to use `ON DELETE SET NULL` for `transactions` so deleting an account or category will not remove historical transactions. Deletions are implemented as soft-deletes via a `deleted_at` timestamp on `accounts`/`categories` so the UI can confirm and optionally undelete.
+- Line-by-line explanation:
+	- `src-tauri/src/db.rs`:
+		- Added `AccountRow` and `CategoryRow` structs (serializable) and CRUD helpers: `get_accounts`, `insert_account`, `update_account`, `delete_account`, `get_categories`, `insert_category`, `update_category`, `delete_category`.
+		- Updated `TransactionRow` to allow `account_id` to be nullable (`Option<String>`) and adjusted `CreateTransaction`/`UpdateTransaction` types accordingly so transactions can reference NULL after deletes.
+		- `run_migrations()` now creates tables with `ON DELETE SET NULL` on the `transactions` foreign keys and adds `deleted_at` audit columns for soft-deletes.
+	- `src-tauri/src/commands.rs`:
+		- Replaced stubbed account/category commands with wrappers that open the DB and call the new helpers, returning structured rows to the frontend.
+	- `db/migrations/0002_accounts_categories.sql`:
+		- Describes the intended schema changes (adds audit columns and documents the `ON DELETE SET NULL` policy). The runtime migrations in `db.rs` ensure the schema on startup.
+- How to run and test locally (commands):
+
+```powershell
+# Frontend-only dev
+npm run dev
+
+# Full backend + frontend (requires Rust toolchain)
+npm run tauri
+
+# Run Rust unit tests for DB helpers
+cd src-tauri
+cargo test
+```
+- Suggested follow-up learning items or references:
+	- Review SQLite foreign key semantics and `ON DELETE` behavior.
+	- Learn about soft-delete patterns and audit fields in local apps.
+- Implementation TODOs / Reviewer handoff:
+	- Run `cargo test` in `src-tauri` and `npm test` in the repo root.
+	- Verify the frontend `TransactionForm` is updated to accept `account_id`/`category_id` being optional and that the UI treats nulls as `Unassigned` or `Deleted`.
+	- Confirm that the migration file `0002_accounts_categories.sql` matches reviewer expectations for on-disk migrations (the runtime runner enforces schema at startup).
+
 
 Change: Make `tauri-api` dev-safe with localStorage mock fallback
 - One-paragraph summary:

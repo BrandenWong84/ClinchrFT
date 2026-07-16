@@ -18,13 +18,20 @@ export default function TransactionForm({ initial = {}, onCancel, onSave }: Prop
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const amountCents = dollarsToCents(amount)
-    onSave({ accountId, categoryId, amountCents, memo: memo || undefined, date })
+    const payload = {
+      accountId: accountId === '' ? undefined : accountId,
+      categoryId: categoryId === '' ? undefined : categoryId,
+      amountCents,
+      memo: memo || undefined,
+      date,
+    }
+    onSave(payload)
   }
 
   return (
     <form onSubmit={submit} style={{display: 'grid', gap:8}}>
       <label>Account
-        <input value={accountId} onChange={e => setAccountId(e.target.value)} required />
+        <input value={accountId} onChange={e => setAccountId(e.target.value)} />
       </label>
       <label>Category
         <input value={categoryId} onChange={e => setCategoryId(e.target.value)} />

@@ -1,4 +1,36 @@
 ---
+
+Change: Account-selection UX and persistent active account
+- One-paragraph summary:
+	- Implemented a persistent account selector on the Transactions page so users can choose an "active" account. Transactions are created and listed for the selected account by default, and the last selection is persisted in `localStorage` under the key `clinchrft:lastAccountId`. A Tauri command `create_account` was added so the frontend can create a `default` account when the app has no accounts.
+- Line-by-line explanation:
+	- `src-tauri/src/commands.rs`: added `create_account(name: String, notes: Option<String>) -> Result<AccountRow, String>` which wraps `crate::db::insert_account(...)` and is exposed as a Tauri command.
+	- `src-tauri/src/main.rs`: registered `commands::create_account` in the Tauri invoke handler list.
+	- `src/services/tauri-api.ts`: added `createAccount(name: string, notes?: string)` wrapper that calls the Tauri command when available and provides a `localStorage`-backed mock in dev.
+	- `src/pages/Transactions.tsx`: added an account dropdown with an explicit `Unassigned` option, persisted last selection in `localStorage`, created a `default` account when no accounts exist, filtered transactions client-side by the selected account, and passed the selected account to the create transaction flow so `account_id` is recorded (or `NULL` when Unassigned).
+	- `src/components/TransactionForm.tsx`: removed the free-text account input — the form no longer accepts arbitrary account ids. The form uses the parent-provided `selectedAccountId` (or the transaction's existing account when editing) and converts empty selection to `undefined` before submitting.
+- How to run and test locally (commands):
+
+```powershell
+# Rust tests
+cd src-tauri
+cargo test
+
+# TypeScript checks and frontend tests (repo root)
+npx tsc --noEmit
+npm test
+
+# Run the app and manually verify behavior
+npm run tauri
+# Open Transactions page; verify dropdown, create transaction (assigned/unassigned), and that selection persists after reload
+```
+- Suggested follow-up learning items or references:
+	- Review Tauri command exposure and the security surface of adding new commands.
+	- Consider enhancing the account dropdown with a "Create account" action/modal and soft-delete handling (show "(deleted)" label).
+- Implementation TODOs / Reviewer handoff:
+	- Run `cargo test`, `npx tsc --noEmit`, and `npm test` to verify no regressions.
+	- Manually verify Transactions page: dropdown shows `Unassigned` + accounts, selecting an account filters transactions, creating a transaction assigns `account_id` appropriately, and the default account is created on first-run when no accounts exist.
+	- Pay attention to the mock behavior in `src/services/tauri-api.ts` when running `npm run dev` — the mock stores accounts/transactions in `localStorage` under `clinchrft:mock:db_v1`.
 Change: Fix tests and make frontend accept nullable account/category
 - One-paragraph summary:
 	- Adjusted backend tests to create required `accounts` and `categories` before inserting `transactions` so SQLite FK constraints (with `ON DELETE SET NULL`) pass in tests. Updated frontend TypeScript types and UI so `accountId` and `categoryId` are optional; the `TransactionForm` allows empty selection and converts empty strings to `undefined` on submit; the `Transactions` page resolves account/category names and displays `Unassigned / Deleted` when a reference is missing or soft-deleted.
@@ -1124,6 +1156,66 @@ npm test
 	- Inspect [src/services/tauri-api.ts](src/services/tauri-api.ts#L1) to verify `isTauriAvailable()` is exported and its implementation is resilient to missing `window`.
 	- Verify the test mock setup uses `mockInvoke.mockReset()` (not reassigning the mock) in `beforeEach` so the mocked `invoke` remains the same function reference.
 	- Optional: add a negative test asserting `isTauriAvailable()` returns `false` when neither marker is present.
+
+	---
+
+	Change: Repo-local DB option for development (`CLINCHRFT_USE_REPO_DB`)
+	- One-paragraph summary:
+		- Added an explicit, opt-in developer flag `CLINCHRFT_USE_REPO_DB` so contributors can run the app against a repo-local SQLite DB at `./data/clinchrft.db`. This preserves existing `CLINCHRFT_DB_PATH` behavior (highest priority) and the production default (OS app-data folder). A `.gitignore` entry for `data/clinchrft.db` was added to avoid accidental commits.
+	- Line-by-line explanation:
+		- `src-tauri/src/commands.rs`:
+			- `db_path()` now checks (in order): `CLINCHRFT_DB_PATH` (if set, used unchanged), `CLINCHRFT_USE_REPO_DB` (if set, resolves `cwd/data/clinchrft.db`, creating `./data` if needed), and finally the `directories::ProjectDirs` app-data folder (production default). This keeps behavior deterministic and opt-in for devs.
+		- `.gitignore`: added `data/clinchrft.db` to prevent committing local DBs.
+		- `README.md`: added short instructions and PowerShell examples showing how to enable repo-local DB mode or set `CLINCHRFT_DB_PATH` explicitly.
+	- How to run and test locally (commands):
+		- PowerShell (repo root):
+
+	```powershell
+	Set-Location 'E:\path\to\repo'
+	$env:CLINCHRFT_USE_REPO_DB = '1'
+	npm run tauri
+	```
+
+		- Or explicitly set `CLINCHRFT_DB_PATH`:
+
+	```powershell
+	$env:CLINCHRFT_DB_PATH = (Resolve-Path .\data\clinchrft.db).Path
+	npm run tauri
+	```
+
+		- Note: `run_migrations()` runs on startup and enforces the intended schema. When switching DB paths, copy the existing DB file to the new location or execute the SQL migration files in `db/migrations/` against the target DB.
+	- Suggested follow-up learning items:
+		- Review `directories::ProjectDirs` to understand platform app-data locations.
+		- Inspect `db/migrations/0002_accounts_categories.sql` to understand schema migration implications when moving DB files.
+	- Implementation TODOs / Reviewer handoff:
+		- Verify default behavior remains unchanged for end users (run app without env vars and confirm DB under OS app-data).
+		- Verify `CLINCHRFT_USE_REPO_DB` creates `./data/clinchrft.db` and that file is ignored by git.
+		- Run `cargo test` in `src-tauri` to ensure no test regressions (tests that set `CLINCHRFT_DB_PATH` should pass).
+		- Reviewer: run the following commands to validate both default and repo-local behavior:
+
+	```powershell
+	# Default behavior (no env vars)
+	npm run tauri
+
+	# Repo-local DB behavior
+	Set-Location 'E:\path\to\repo'
+	$env:CLINCHRFT_USE_REPO_DB = '1'
+	npm run tauri
+
+	# Rust tests
+	cd src-tauri
+	cargo test
+	```
+
+	- Notes for reviewer: confirm that no other code assumes the DB path is in app-data (grep for `ProjectDirs::from`) and validate migration behavior when switching DB files.
+
+	---
+
+	**Reviewer handoff**
+
+	- Implemented: opt-in repo-local DB resolution via `CLINCHRFT_USE_REPO_DB`, preserved `CLINCHRFT_DB_PATH`, added `.gitignore` entry, and documented steps in `README.md` and this learning artifact.
+	- Assumptions: creating `./data` in the current working directory is acceptable for dev workflows.
+	- Please run the validation commands above in a fresh `@reviewer` session and report any failures or unexpected behavior.
 
 ---
 

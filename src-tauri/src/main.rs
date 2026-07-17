@@ -11,6 +11,7 @@ fn main() {
             commands::update_transaction,
             commands::delete_transaction,
             commands::get_accounts,
+                commands::create_account,
             commands::get_categories,
             commands::get_app_path
         ])

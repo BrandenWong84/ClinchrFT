@@ -74,6 +74,21 @@ export async function getCategories(): Promise<Category[]> {
   return s.categories as Category[]
 }
 
+export async function createAccount(name: string, notes?: string): Promise<Account> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    return core.invoke('create_account', { name, notes }) as Promise<Account>
+  }
+
+  if (process.env.NODE_ENV === 'production') throw new Error('Tauri bridge not available')
+  const s = await ensureMockInitialized()
+  const id = Date.now().toString()
+  const created = { id, name }
+  s.accounts.push(created)
+  saveMockState(s)
+  return created
+}
+
 export async function createTransaction(tx: Omit<Transaction, 'id'>): Promise<Transaction> {
   if (isTauriAvailable()) {
     const core = await import('@tauri-apps/api/core')

@@ -9,6 +9,15 @@ fn db_path() -> PathBuf {
         return PathBuf::from(p);
     }
 
+    // Developer convenience: allow repo-local DB when explicitly requested.
+    if std::env::var_os("CLINCHRFT_USE_REPO_DB").is_some() {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
+        let data_dir = cwd.join("data");
+        std::fs::create_dir_all(&data_dir).ok();
+        return data_dir.join("clinchrft.db");
+    }
+
+    // Production default: use platform-appropriate app data folder.
     let proj_dirs = directories::ProjectDirs::from("com", "example", "ClinchrFT").unwrap();
     let data_dir = proj_dirs.data_dir();
     std::fs::create_dir_all(data_dir).ok();
@@ -51,6 +60,13 @@ pub fn get_accounts() -> Result<Vec<AccountRow>, String> {
     let path = db_path();
     let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
     crate::db::get_accounts(&conn).map_err(|e| format!("DB query error: {}", e))
+}
+
+#[command]
+pub fn create_account(name: String, notes: Option<String>) -> Result<AccountRow, String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    crate::db::insert_account(&conn, &name, notes).map_err(|e| format!("DB insert error: {}", e))
 }
 
 #[command]

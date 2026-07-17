@@ -6,10 +6,10 @@ type Props = {
   initial?: Partial<Transaction>
   onCancel?: () => void
   onSave: (data: Omit<Transaction, 'id'>) => void
+  selectedAccountId?: string
 }
 
-export default function TransactionForm({ initial = {}, onCancel, onSave }: Props) {
-  const [accountId, setAccountId] = useState(initial.accountId || '')
+export default function TransactionForm({ initial = {}, onCancel, onSave, selectedAccountId }: Props) {
   const [categoryId, setCategoryId] = useState(initial.categoryId || '')
   const [amount, setAmount] = useState(initial.amountCents !== undefined ? centsToDollars(initial.amountCents) : '')
   const [memo, setMemo] = useState(initial.memo || '')
@@ -18,8 +18,10 @@ export default function TransactionForm({ initial = {}, onCancel, onSave }: Prop
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const amountCents = dollarsToCents(amount)
+    // accountId is provided by parent via selectedAccountId; fall back to initial.accountId if parent didn't pass one
+    const resolvedAccountId = typeof selectedAccountId !== 'undefined' ? selectedAccountId : (initial.accountId ?? '')
     const payload = {
-      accountId: accountId === '' ? undefined : accountId,
+      accountId: resolvedAccountId === '' ? undefined : resolvedAccountId,
       categoryId: categoryId === '' ? undefined : categoryId,
       amountCents,
       memo: memo || undefined,
@@ -30,9 +32,7 @@ export default function TransactionForm({ initial = {}, onCancel, onSave }: Prop
 
   return (
     <form onSubmit={submit} style={{display: 'grid', gap:8}}>
-      <label>Account
-        <input value={accountId} onChange={e => setAccountId(e.target.value)} />
-      </label>
+      {/* Account selection is provided by the Transactions page; no free-text account input allowed. */}
       <label>Category
         <input value={categoryId} onChange={e => setCategoryId(e.target.value)} />
       </label>

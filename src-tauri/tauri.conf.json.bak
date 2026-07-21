@@ -1,0 +1,15 @@
+{
+  "package": {
+    "productName": "ClinchrFT",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "bundle": {
+      "identifier": "com.example.clinchrft"
+    },
+    "allowlist": {
+      "all": false
+    }
+  }
+}
+

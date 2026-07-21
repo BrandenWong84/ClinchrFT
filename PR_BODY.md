@@ -1,0 +1,13 @@
+Fix tests and support nullable account/category
+
+Summary:
+- Backend tests now create account/category before inserting transactions.
+- Frontend: make `accountId`/`categoryId` optional, `TransactionForm` converts empty strings to undefined, and transaction list shows "Unassigned / Deleted" for missing or soft-deleted refs.
+
+Files changed: db.rs, commands.rs, db/migrations/0002_accounts_categories.sql, src/types/index.ts, src/components/TransactionForm.tsx, src/pages/Transactions.tsx, src/components/TransactionList.tsx, docs/learning-artifacts.md
+
+Validation:
+- Backend: `cd src-tauri && cargo test`
+- Frontend: `npx tsc --noEmit && npm test`
+
+Notes: No Tauri allowlist changes required.

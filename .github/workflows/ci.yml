@@ -39,4 +39,4 @@ jobs:
             echo "No Rust tests to run"
           fi
       - name: Run allowlist checker
-        run: node scripts/tauri-allowlist-checker.js
+        run: node scripts/tauri-allowlist-checker.cjs

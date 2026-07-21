@@ -1,7 +1,7 @@
 export interface Transaction {
   id: string
-  accountId: string
-  categoryId: string
+  accountId?: string
+  categoryId?: string
   amountCents: number
   memo?: string
   date: string // ISO date

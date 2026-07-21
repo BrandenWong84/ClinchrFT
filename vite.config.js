@@ -1,7 +1,22 @@
 import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
-export default ({ command }) =>
+export default () =>
   defineConfig({
-    // Use `public` as root only for production builds so tests/dev use repository root
-    root: command === 'build' ? 'public' : undefined,
+    plugins: [react()],
+    server: {
+      watch: {
+        ignored: ['**/src-tauri/target/**']
+      },
+      fs: {
+        allow: ['..']
+      }
+    }
+    ,
+    test: {
+      include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}'],
+      environment: 'jsdom'
+      ,
+      setupFiles: ['tests/setupTests.ts']
+    }
   })

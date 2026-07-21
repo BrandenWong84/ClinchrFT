@@ -87,7 +87,9 @@ if(fs.existsSync(confPath)){
   try { tauriConf = JSON.parse(fs.readFileSync(confPath,'utf8')); } catch(e) { /* ignore */ }
 }
 
-const allowAll = tauriConf?.tauri?.allowlist?.all === true;
+// support both old-style (`tauri.allowlist`) and newer top-level `allowlist` shapes
+const tauriAllowlist = tauriConf?.tauri?.allowlist || tauriConf?.allowlist || null;
+const allowAll = tauriAllowlist?.all === true;
 
 const report = {
   timestamp: new Date().toISOString(),
@@ -96,7 +98,7 @@ const report = {
   frontendModulesMapped,
   rustUses,
   commandNames,
-  tauriAllowlist: tauriConf?.tauri?.allowlist || null,
+  tauriAllowlist,
   allowAll
 };
 

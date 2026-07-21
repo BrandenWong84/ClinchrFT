@@ -13,7 +13,14 @@ fn main() {
             commands::get_accounts,
                 commands::create_account,
             commands::get_categories,
-            commands::get_app_path
+            commands::get_app_path,
+            // CSV import/export and backup/restore
+            commands::preview_import_csv,
+            commands::apply_import_csv,
+            commands::export_transactions_csv_data,
+            commands::export_transactions_csv,
+            commands::create_backup,
+            commands::restore_backup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

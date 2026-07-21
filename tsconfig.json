@@ -12,7 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "types": ["node", "vitest"]
+    "types": ["node", "vitest", "@playwright/test"]
   },
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules"]

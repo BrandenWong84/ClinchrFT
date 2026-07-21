@@ -1,5 +1,39 @@
 ---
 
+Change: CSV Import/Export and Local Backup UX
+- One-paragraph summary:
+	- Implemented CSV export respecting frontend filters, exporting `Account` as account name, `Amount` formatted as dollars (e.g., `1.23`), and a `Transaction ID` header label. The frontend now opens a Save-As dialog (Tauri `dialog.save`) so users choose the export destination; the backend writes to the chosen path. CSV import preview now resolves account names to IDs when possible and returns per-row warnings for unknown account names; apply-import resolves names and inserts transactions inside a DB transaction. Backup/restore commands were also wired to the frontend API.
+- Line-by-line explanation:
+	- `src-tauri/src/commands.rs`: updated `export_transactions_csv(filter: Option<GetTransactionsFilter>, dest_path: Option<String>)` to query filtered transactions, resolve account IDs to names, format amounts to dollars via `format_cents_to_dollars`, write a CSV with header `Transaction ID,Date,Account,Category,Memo,Amount`, and write to `dest_path` when provided. `preview_import_csv` now fetches accounts to map names→ids and returns `account_name` and per-row `errors` when a name is unknown. `apply_import_csv` resolves names (or validates ids) before insert and performs inserts in a DB transaction.
+	- `src/services/tauri-api.ts`: `exportTransactionsCsv` updated to accept optional `destPath` and to pass `dest_path` to the Tauri command. `previewImportCsv`, `applyImportCsv`, `createBackup`, and `restoreBackup` wrappers expose new backend commands.
+	- `src/pages/Transactions.tsx`: the Export button now opens a Tauri Save dialog when available and passes the chosen path to `exportTransactionsCsv`. The export call includes the current filters so the server writes only the filtered set.
+	- `src/components/ImportPreview.tsx`: preview UI updated to display `Account` column, format `amount_cents` into dollar strings using `centsToDollars`, and show per-row error/warning messages returned from the backend preview.
+- How to run and test locally (commands):
+
+```powershell
+# Rust tests
+cd src-tauri
+cargo test
+
+# TypeScript checks and frontend tests (repo root)
+npx tsc --noEmit
+npm test
+
+# Run the app and test export/import UI manually (with Tauri runtime available)
+npm run tauri
+# Use Transactions page: apply filters, click Export, choose a path in Save dialog, and confirm the CSV contains account names and dollar amounts.
+```
+- Suggested follow-up learning items or references:
+	- Review CSV quoting/escaping rules and consider adding configurable column mapping for imports.
+	- Consider adding an account name resolution UI so users can map unknown names to existing accounts during preview.
+	- Audit Tauri allowlist entries when adding more frontend file-system operations (the Save dialog and explicit dest_path are minimal but additional file APIs require justification).
+- Implementation TODOs / Reviewer handoff:
+	- Run `cargo test`, `npx tsc --noEmit`, and `npm test` to verify no regressions.
+	- Manually test export Save-As flow in a Tauri dev window: apply date/account filters and export; verify CSV header `Transaction ID,Date,Account,Category,Memo,Amount`, that `Account` contains account names (not ids), and `Amount` uses decimal dollars (e.g., `1.23`).
+	- Test import preview: load a CSV with an account name that exists and one that does not; verify preview shows resolved `account_name` and adds `unknown account: <name>` error for the missing one; confirm `Confirm Import` fails when unknown account names exist (or update UI to map them in a follow-up change).
+	- Verify backup/restore commands via `createBackup`/`restoreBackup` UI flows (these wrappers exist in `src/services/tauri-api.ts`).
+
+
 Change: Account-selection UX and persistent active account
 - One-paragraph summary:
 	- Implemented a persistent account selector on the Transactions page so users can choose an "active" account. Transactions are created and listed for the selected account by default, and the last selection is persisted in `localStorage` under the key `clinchrft:lastAccountId`. A Tauri command `create_account` was added so the frontend can create a `default` account when the app has no accounts.
@@ -28,6 +62,7 @@ npm run tauri
 	- Review Tauri command exposure and the security surface of adding new commands.
 	- Consider enhancing the account dropdown with a "Create account" action/modal and soft-delete handling (show "(deleted)" label).
 - Implementation TODOs / Reviewer handoff:
+ - Implementation TODOs / Reviewer handoff:
 	- Run `cargo test`, `npx tsc --noEmit`, and `npm test` to verify no regressions.
 	- Manually verify Transactions page: dropdown shows `Unassigned` + accounts, selecting an account filters transactions, creating a transaction assigns `account_id` appropriately, and the default account is created on first-run when no accounts exist.
 	- Pay attention to the mock behavior in `src/services/tauri-api.ts` when running `npm run dev` — the mock stores accounts/transactions in `localStorage` under `clinchrft:mock:db_v1`.
@@ -56,6 +91,38 @@ npm test
 	- Review how SQLite enforces foreign keys and the interaction of `ON DELETE SET NULL` with soft-deletes.
 	- Consider replacing free-text account/category inputs with `<select>` elements listing current accounts/categories plus an explicit `Unassigned` option.
 - Implementation TODOs / Reviewer handoff:
+	- Frontend changes implemented; reviewer should verify backend `get_transactions` returns `PaginatedTransactions` shape.
+
+---
+
+Change: Frontend — Transactions filtering, paging, and UI wiring
+- One-paragraph summary:
+	- Implemented the frontend portion of server-driven transaction filtering and pagination: added a small `TransactionFilters` component, wired the `Transactions` page to call `getTransactionsPaged(filters)`, and added Prev/Next pagination controls plus loading/empty states. Tests were updated to mock the paged API.
+- Line-by-line explanation:
+	- `src/pages/Transactions.tsx`: added local state for `startDate`, `endDate`, `selectedCategoryId`, `limit`, `offset`, and `total`. Replaced client-side filtering logic with `fetchTransactions()` that calls `getTransactionsPaged(...)` and sets `transactions` from the server response. Added UI wiring for filter apply/clear and changed the Add Transaction flow to re-fetch the current page after mutations.
+	- `src/components/TransactionFilters.tsx`: new presentational component exposing date inputs, category select, and Apply/Clear buttons. It lifts selected values to the parent via callbacks.
+	- `tests/transactions-page.test.tsx`: updated to mock `getTransactionsPaged` and preserved previous behavioral tests (account repair, FK error handling on create).
+- How to run and test locally (commands):
+
+```powershell
+# TypeScript checks
+npx tsc --noEmit
+
+# Run frontend unit tests (Vitest)
+npm test
+
+# Run the app in dev mode
+npm run dev
+```
+- Suggested follow-up learning items:
+	- Add a page-size selector and direct page navigation.
+	- Consider keyset pagination for better performance on large datasets.
+	- Add debounce for free-text memo search and consider FTS for better text search.
+- Reviewer handoff checklist:
+	- Verify that the Tauri backend exposes `get_transactions` returning `{ items, total, limit, offset }`.
+	- Run `npx tsc --noEmit` and `npm test` to validate no regressions.
+	- Manually exercise the Transactions UI in `npm run dev`: apply filters, page forward/back, and confirm expected results.
+
 	- Run `cargo test` and confirm all Rust tests pass.
 	- Run `npx tsc --noEmit` and `npm test` to confirm frontend typechecks and tests pass.
 	- Manually verify Transactions page shows `Unassigned / Deleted` for null/missing account/category and that TransactionForm can save transactions without an account.

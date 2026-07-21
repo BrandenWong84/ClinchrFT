@@ -401,6 +401,40 @@ npm test
 
 ---
 
+Change: Update agent docs to align with repo conventions (imports, vitest, tests/artifacts)
+- One-paragraph summary:
+	- Standardized agent guidance to match the repository's current conventions: extensionless TypeScript imports, Vitest/jsdom testing setup, and a requirement that engineers include tests and teaching artifacts for implemented features. These docs changes are documentation-only and do not modify runtime code.
+- Line-by-line explanation:
+	- `docs/AGENTS.md`: replaced ESM/tooling and verification sections with explicit guidance to use extensionless imports in TS sources, Node16 module resolution, Vitest with `jsdom` and `tests/setupTests.ts`, and a clear verification checklist (`npx tsc --noEmit`, `npm test`, `npx vitest --run`, `cargo test` for Rust changes).
+	- `.github/agents/engineer.agent.md`: rule 8 updated to require that engineer agents add tests (Vitest/Rust) and learning artifacts in `docs/learning-artifacts.md`, and to run verification steps locally before requesting review.
+	- `.github/agents/planner.agent.md`: added a rule requiring planners to state testing and teaching-artifact requirements in task specs so engineers know what tests/artifacts to produce.
+- How to run and test locally (commands):
+
+```powershell
+# Static typecheck
+npx tsc --noEmit
+
+# Run frontend tests (Vitest)
+npm test
+
+# Run Vitest explicitly
+npx vitest --run
+
+# If Rust changes are present (not required for this docs-only change):
+cd src-tauri
+cargo test
+```
+- Suggested follow-up learning items or references:
+	- Read TypeScript `moduleResolution: node16` and Node ESM docs.
+	- Review Vitest configuration for `jsdom` and test setup files.
+	- Check `docs/AGENTS.md` at the start of each planning/engineering session.
+- Implementation TODOs / Reviewer handoff:
+	- Confirm these three files only changed: `docs/AGENTS.md`, `.github/agents/engineer.agent.md`, `.github/agents/planner.agent.md`.
+	- Run the commands above to verify no type/test regressions.
+	- If CI references any scripts by old names (e.g., `.js`), update CI to call `.cjs` variants where appropriate.
+
+---
+
 Change: Safe migration for unique account name index (dedupe before index)
 - One-paragraph summary:
 	- Implemented a defensive migration step that removes duplicate `accounts.name` rows before creating the unique index `idx_accounts_name`. This prevents runtime failures when an existing DB contains duplicate account names (for example multiple `default` rows) and ensures first-run migrations succeed even if the DB was populated by older app versions or by race conditions on account creation.

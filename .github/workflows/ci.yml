@@ -44,7 +44,7 @@ jobs:
             libxrandr-dev \
             libxinerama-dev \
             libxcursor-dev \
-            libxkbcommon-dev
+            libxkbcommon-dev \
             imagemagick
           echo "Checking available WebKit/JavaScriptCore/Libsoup packages"
           # Install whichever WebKit/JSCore/libsoup dev packages are available on this distro

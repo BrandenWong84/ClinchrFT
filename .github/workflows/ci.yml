@@ -93,6 +93,11 @@ jobs:
       - name: Run JS unit tests
         run: npm test
 
+      - name: Ensure Tauri icon exists for CI
+        run: |
+          mkdir -p src-tauri/icons
+          echo iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII= | base64 -d > src-tauri/icons/icon.png
+
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 

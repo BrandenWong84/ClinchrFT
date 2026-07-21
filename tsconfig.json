@@ -4,16 +4,15 @@
     "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM"],
     "jsx": "react-jsx",
-    "module": "Node16",
-    "moduleResolution": "node16",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "types": ["node", "vitest"],
-    "allowJs": true
+    "types": ["node", "vitest"]
   },
   "include": ["src/**/*", "tests/**/*"],
   "exclude": ["node_modules"]

@@ -1,7 +1,7 @@
 use tauri::command;
 use std::path::PathBuf;
 
-use crate::db::{open_db, CreateTransaction, UpdateTransaction, TransactionRow, AccountRow, CategoryRow};
+use crate::db::{open_db, CreateTransaction, UpdateTransaction, TransactionRow, AccountRow, CategoryRow, GetTransactionsFilter, PaginatedTransactions};
 
 fn db_path() -> PathBuf {
     // Allow tests or CI to override the DB path by setting CLINCHRFT_DB_PATH.
@@ -11,8 +11,17 @@ fn db_path() -> PathBuf {
 
     // Developer convenience: allow repo-local DB when explicitly requested.
     if std::env::var_os("CLINCHRFT_USE_REPO_DB").is_some() {
-        let cwd = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
-        let data_dir = cwd.join("data");
+        // Prefer placing the repo-local DB at the repo root `./data/clinchrft.db` so that
+        // it does not live under `src-tauri/` (which is watched by the Tauri/Cargo dev watcher
+        // and can trigger rebuilds when the DB file changes).
+        let mut dir = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
+        // If running with cwd inside `src-tauri`, step up to parent (repo root)
+        if dir.file_name().map(|s| s == "src-tauri").unwrap_or(false) {
+            if let Some(parent) = dir.parent() {
+                dir = parent.to_path_buf();
+            }
+        }
+        let data_dir = dir.join("data");
         std::fs::create_dir_all(&data_dir).ok();
         return data_dir.join("clinchrft.db");
     }
@@ -25,17 +34,28 @@ fn db_path() -> PathBuf {
 }
 
 #[command]
-pub fn get_transactions() -> Result<Vec<TransactionRow>, String> {
+pub fn get_transactions(filter: Option<GetTransactionsFilter>) -> Result<PaginatedTransactions, String> {
     let path = db_path();
     let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
-    crate::db::get_transactions(&conn).map_err(|e| format!("DB query error: {}", e))
+    crate::db::get_transactions_paginated(&conn, filter).map_err(|e| format!("DB query error: {}", e))
 }
 
 #[command]
 pub fn create_transaction(tx: CreateTransaction) -> Result<TransactionRow, String> {
     let path = db_path();
+    // Log DB path and incoming payload for easier debugging of FK errors in dev.
+    println!("create_transaction -> db_path: {}", path.display());
+    println!("create_transaction -> account_id: {:?}, category_id: {:?}", tx.account_id, tx.category_id);
     let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
-    crate::db::insert_transaction(&conn, tx).map_err(|e| format!("DB insert error: {}", e))
+    crate::db::insert_transaction(&conn, tx).map_err(|e| {
+        let s = format!("{}", e);
+        if s.contains("FOREIGN KEY constraint failed") || s.contains("constraint failed: FOREIGN KEY") {
+            // Map to a clearer error message suitable for UI display
+            format!("Foreign key error: invalid account or category id")
+        } else {
+            format!("DB insert error: {}", s)
+        }
+    })
 }
 
 #[command]
@@ -126,7 +146,7 @@ mod tests {
 
         // Delete and confirm removal.
         delete_transaction(created.id.clone()).expect("delete failed");
-        let all = get_transactions().expect("get failed");
-        assert!(all.iter().all(|r| r.id != created.id));
+        let all = get_transactions(None).expect("get failed");
+        assert!(all.items.iter().all(|r| r.id != created.id));
     }
 }

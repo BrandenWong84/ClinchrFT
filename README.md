@@ -44,6 +44,9 @@ npm run tauri
 ```
 
 - Alternatively set `CLINCHRFT_DB_PATH` explicitly to any path (absolute preferred):
+ 
+Notes about repo-local DB path and dev watcher
+- When `CLINCHRFT_USE_REPO_DB` is set the runtime will place the DB at the repository root under `./data/clinchrft.db` (one level above `src-tauri/`). This avoids placing the DB inside `src-tauri/` which would otherwise trigger the Tauri/Cargo dev file watcher and cause rebuilds when the DB file changes. If you previously used `CLINCHRFT_USE_REPO_DB` and saw restarts, unset the env var and instead set `CLINCHRFT_DB_PATH` to a path outside `src-tauri/`.
 
 ```powershell
 $env:CLINCHRFT_DB_PATH = (Resolve-Path .\data\clinchrft.db).Path

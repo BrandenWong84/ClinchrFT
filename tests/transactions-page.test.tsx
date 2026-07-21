@@ -11,7 +11,7 @@ var mockCreateTransaction: any
 var mockUpdateTransaction: any
 var mockDeleteTransaction: any
 
-vi.mock('../src/services/tauri-api.js', () => {
+vi.mock('../src/services/tauri-api', () => {
   mockGetTransactions = vi.fn(async () => [])
   mockGetAccounts = vi.fn(async () => [{ id: 'real-1', name: 'Real' }])
   mockGetCategories = vi.fn(async () => [])
@@ -31,8 +31,8 @@ vi.mock('../src/services/tauri-api.js', () => {
   }
 });
 
-import TransactionsPage from '../src/pages/Transactions.js'
-import * as api from '../src/services/tauri-api.js'
+import TransactionsPage from '../src/pages/Transactions'
+import * as api from '../src/services/tauri-api'
 
 describe('Transactions page', () => {
   beforeEach(() => { document.body.innerHTML = '' })
@@ -40,8 +40,7 @@ describe('Transactions page', () => {
 
   it('repairs a stale saved lastAccountId on load', async () => {
     // put a stale id in localStorage
-    // @ts-ignore TS2349: test environment global resolution
-    ;window.localStorage.setItem('clinchrft:lastAccountId', 'stale-id')
+    window.localStorage.setItem('clinchrft:lastAccountId', 'stale-id')
 
     // ensure mocked getAccounts returns a different id
     mockGetAccounts.mockResolvedValue([{ id: 'real-1', name: 'Real Account' }])

@@ -1,4 +1,4 @@
-import type { Transaction, Account, Category } from '../types/index.js'
+import type { Transaction, Account, Category } from '../types/index'
 
 const MOCK_KEY = 'clinchrft:mock:db_v1'
 
@@ -41,15 +41,46 @@ async function ensureMockInitialized() {
   return s
 }
 
-export async function getTransactions(): Promise<Transaction[]> {
+// Dates: use ISO-8601 date strings (YYYY-MM-DD) for `startDate`/`endDate` in filters.
+export type TransactionsFilter = {
+  startDate?: string
+  endDate?: string
+  accountId?: string
+  categoryId?: string
+  minAmountCents?: number
+  maxAmountCents?: number
+  q?: string
+  sortBy?: 'date' | 'amount'
+  sortDir?: 'asc' | 'desc'
+  limit?: number
+  offset?: number
+}
+
+export type PaginatedTransactions = {
+  items: Transaction[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export async function getTransactionsPaged(filters?: TransactionsFilter): Promise<PaginatedTransactions> {
   if (isTauriAvailable()) {
     const core = await import('@tauri-apps/api/core')
-    return core.invoke('get_transactions') as Promise<Transaction[]>
+    if (typeof filters === 'undefined') {
+      return core.invoke('get_transactions') as Promise<PaginatedTransactions>
+    }
+    return core.invoke('get_transactions', { filter: filters }) as Promise<PaginatedTransactions>
   }
 
-  if (process.env.NODE_ENV === 'production') return []
+  if (process.env.NODE_ENV === 'production') return { items: [], total: 0, limit: 0, offset: 0 }
   const s = await ensureMockInitialized()
-  return s.transactions as Transaction[]
+  return { items: s.transactions as Transaction[], total: (s.transactions || []).length, limit: filters?.limit ?? (s.transactions || []).length, offset: filters?.offset ?? 0 }
+}
+
+export async function getTransactions(): Promise<Transaction[]> {
+  const paged = await getTransactionsPaged()
+  if (Array.isArray(paged)) return paged as Transaction[]
+  return (paged as PaginatedTransactions).items
 }
 
 export async function getAccounts(): Promise<Account[]> {
@@ -92,13 +123,15 @@ export async function createAccount(name: string, notes?: string): Promise<Accou
 export async function createTransaction(tx: Omit<Transaction, 'id'>): Promise<Transaction> {
   if (isTauriAvailable()) {
     const core = await import('@tauri-apps/api/core')
-    return core.invoke('create_transaction', { tx }) as Promise<Transaction>
+    const sanitized = { ...tx, categoryId: (tx as any).categoryId === '' ? undefined : (tx as any).categoryId }
+    return core.invoke('create_transaction', { tx: sanitized }) as Promise<Transaction>
   }
 
   if (process.env.NODE_ENV === 'production') throw new Error('Tauri bridge not available')
   const s = await ensureMockInitialized()
   const id = Date.now().toString()
-  const created = { ...tx, id }
+  const sanitized = { ...tx, categoryId: (tx as any).categoryId === '' ? undefined : (tx as any).categoryId }
+  const created = { ...sanitized, id }
   s.transactions.push(created)
   saveMockState(s)
   return created
@@ -107,14 +140,18 @@ export async function createTransaction(tx: Omit<Transaction, 'id'>): Promise<Tr
 export async function updateTransaction(id: string, tx: Partial<Omit<Transaction, 'id'>>): Promise<Transaction> {
   if (isTauriAvailable()) {
     const core = await import('@tauri-apps/api/core')
-    return core.invoke('update_transaction', { id, tx }) as Promise<Transaction>
+    const sanitized = { ...tx } as any
+    if (sanitized.categoryId === '') sanitized.categoryId = undefined
+    return core.invoke('update_transaction', { id, tx: sanitized }) as Promise<Transaction>
   }
 
   if (process.env.NODE_ENV === 'production') throw new Error('Tauri bridge not available')
   const s = await ensureMockInitialized()
   const idx = s.transactions.findIndex((t: any) => t.id === id)
   if (idx === -1) throw new Error('not found')
-  s.transactions[idx] = { ...s.transactions[idx], ...tx }
+  const sanitized = { ...tx } as any
+  if (sanitized.categoryId === '') sanitized.categoryId = undefined
+  s.transactions[idx] = { ...s.transactions[idx], ...sanitized }
   saveMockState(s)
   return s.transactions[idx]
 }

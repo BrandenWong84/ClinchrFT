@@ -1,6 +1,6 @@
 import React from 'react'
-import type { Transaction } from '../types/index.js'
-import { centsToDollars } from '../lib/money.js'
+import type { Transaction } from '../types/index'
+import { centsToDollars } from '../lib/money'
 
 type Props = {
   transactions: Transaction[]

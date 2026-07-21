@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest'
-import { centsToDollars, dollarsToCents } from '../src/lib/money.js'
+import { centsToDollars, dollarsToCents } from '../src/lib/money'
 
 test('money conversions', () => {
   expect(centsToDollars(12345)).toBe('123.45')

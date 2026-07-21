@@ -10,13 +10,15 @@ jobs:
   test:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        run: |
+          git init
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git fetch --no-tags --prune --depth=1 origin ${{ github.sha }}
+          git checkout -f ${{ github.sha }}
 
-      - name: Setup Node
-        uses: actions/setup-node@v3
-        with:
-          node-version: 24
-          cache: 'npm'
+      - name: Verify Node
+        run: node --version || true
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1

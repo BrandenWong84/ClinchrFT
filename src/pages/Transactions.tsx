@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { Transaction } from '../types/index'
-import { getTransactions, createTransaction, updateTransaction, deleteTransaction, getAccounts, getCategories, createAccount } from '../services/tauri-api'
+import { getTransactionsPaged, createTransaction, updateTransaction, deleteTransaction, getAccounts, getCategories, createAccount } from '../services/tauri-api'
 import TransactionList from '../components/TransactionList'
 import TransactionForm from '../components/TransactionForm'
+import TransactionFilters from '../components/TransactionFilters'
 
 const LAST_ACCOUNT_KEY = 'clinchrft:lastAccountId'
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [total, setTotal] = useState<number>(0)
   const [accountsMap, setAccountsMap] = useState<Record<string,string>>({})
   const [accountsList, setAccountsList] = useState<{id:string,name:string}[]>([])
   const [categoriesMap, setCategoriesMap] = useState<Record<string,string>>({})
@@ -16,16 +18,20 @@ export default function TransactionsPage() {
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [selectedAccountId, setSelectedAccountId] = useState<string>('')
+  const [startDate, setStartDate] = useState<string | undefined>(undefined)
+  const [endDate, setEndDate] = useState<string | undefined>(undefined)
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined)
+  const [limit, setLimit] = useState<number>(50)
+  const [offset, setOffset] = useState<number>(0)
 
   async function load() {
     setLoading(true)
     try {
-      const [txs, accounts, categories] = await Promise.all([getTransactions(), getAccounts(), getCategories()])
+      const [accounts, categories] = await Promise.all([getAccounts(), getCategories()])
       setAccountsList(accounts)
       setAccountsMap(Object.fromEntries(accounts.map(a => [a.id, a.name])))
       setCategoriesList(categories)
       setCategoriesMap(Object.fromEntries(categories.map(c => [c.id, c.name])))
-      setTransactions(txs)
 
       // determine selection
       const saved = localStorage.getItem(LAST_ACCOUNT_KEY)
@@ -72,6 +78,8 @@ export default function TransactionsPage() {
         setSelectedAccountId(accounts[0].id)
         localStorage.setItem(LAST_ACCOUNT_KEY, accounts[0].id)
       }
+      // initial fetch of transactions after accounts/categories and selection are established
+      await fetchTransactions()
     } finally {
       setLoading(false)
     }
@@ -110,32 +118,70 @@ export default function TransactionsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete transaction?')) return
     await deleteTransaction(id)
-    load()
+    fetchTransactions()
   }
 
-  const visibleTransactions = transactions.filter(t => {
-    if (selectedAccountId === '') {
-      return t.accountId === undefined || t.accountId === null || t.accountId === ''
+  async function fetchTransactions(p?: { start?: string | undefined, end?: string | undefined, accountId?: string | undefined, categoryId?: string | undefined, limit?: number, offset?: number }) {
+    setLoading(true)
+    try {
+      const f = {
+        startDate: typeof p?.start !== 'undefined' ? p?.start : startDate,
+        endDate: typeof p?.end !== 'undefined' ? p?.end : endDate,
+        accountId: typeof p?.accountId !== 'undefined' ? p?.accountId : (selectedAccountId || undefined),
+        categoryId: typeof p?.categoryId !== 'undefined' ? p?.categoryId : selectedCategoryId,
+        limit: p?.limit ?? limit,
+        offset: p?.offset ?? offset,
+      }
+      const res = await getTransactionsPaged(f)
+      setTransactions(res.items)
+      setTotal(res.total)
+      setLimit(res.limit)
+      setOffset(res.offset)
+    } finally {
+      setLoading(false)
     }
-    return t.accountId === selectedAccountId
-  })
+  }
 
   return (
     <div>
       <h2>Transactions</h2>
-      <div style={{marginBottom: 12, display: 'flex', gap: 12, alignItems: 'center'}}>
-        <label>
-          Account:{' '}
-          <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); localStorage.setItem(LAST_ACCOUNT_KEY, e.target.value) }}>
-            <option value="" disabled>Choose account</option>
-            {accountsList.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-        </label>
-        <button onClick={() => { setEditing(null); setShowForm(true) }}>Add Transaction</button>
+      <div style={{marginBottom: 12}}>
+        <TransactionFilters
+          startDate={startDate}
+          endDate={endDate}
+          onStartDateChange={d => { setStartDate(d) }}
+          onEndDateChange={d => { setEndDate(d) }}
+          accounts={accountsList}
+          categories={categoriesList}
+          accountId={selectedAccountId}
+          categoryId={selectedCategoryId}
+          onAccountChange={id => { setSelectedAccountId(id || ''); localStorage.setItem(LAST_ACCOUNT_KEY, id || '') }}
+          onCategoryChange={id => setSelectedCategoryId(id)}
+          onApply={() => { setOffset(0); fetchTransactions({ start: startDate, end: endDate, accountId: selectedAccountId || undefined, categoryId: selectedCategoryId, limit, offset: 0 }) }}
+          onClear={() => { setStartDate(undefined); setEndDate(undefined); setSelectedCategoryId(undefined); setOffset(0); fetchTransactions({ start: undefined, end: undefined, accountId: selectedAccountId || undefined, categoryId: undefined, limit, offset: 0 }) }}
+        />
+        <div style={{marginTop:8, display:'flex', gap:12, alignItems:'center'}}>
+          <label>
+            Account:{' '}
+            <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); localStorage.setItem(LAST_ACCOUNT_KEY, e.target.value); fetchTransactions({ accountId: e.target.value || undefined, limit, offset: 0 }) }}>
+              <option value="" disabled>Choose account</option>
+              {accountsList.map(a => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </label>
+          <button onClick={() => { setEditing(null); setShowForm(true) }}>Add Transaction</button>
+        </div>
       </div>
-      {loading ? <div>Loading...</div> : <TransactionList transactions={visibleTransactions} accountsMap={accountsMap} categoriesMap={categoriesMap} onEdit={(t)=>{setEditing(t); setShowForm(true)}} onDelete={handleDelete} />}
+
+      {loading ? <div>Loading...</div> : <>
+        <TransactionList transactions={transactions} accountsMap={accountsMap} categoriesMap={categoriesMap} onEdit={(t)=>{setEditing(t); setShowForm(true)}} onDelete={handleDelete} />
+        <div style={{marginTop:8, display:'flex', gap:12, alignItems:'center'}}>
+          <button onClick={() => { const newOffset = Math.max(0, offset - limit); setOffset(newOffset); fetchTransactions({ offset: newOffset, limit }) }} disabled={offset === 0}>Prev</button>
+          <div>Page {Math.floor(offset/limit) + 1} of {Math.max(1, Math.ceil(total/limit))} ({total} items)</div>
+          <button onClick={() => { const newOffset = offset + limit; if (newOffset < total) { setOffset(newOffset); fetchTransactions({ offset: newOffset, limit }) } }} disabled={offset + limit >= total}>Next</button>
+        </div>
+      </>}
 
       {showForm && (
         <div style={{border: '1px solid #ccc', padding: 12, marginTop:12}}>

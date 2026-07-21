@@ -28,6 +28,7 @@ npm run tauri
 	- Review Tauri command exposure and the security surface of adding new commands.
 	- Consider enhancing the account dropdown with a "Create account" action/modal and soft-delete handling (show "(deleted)" label).
 - Implementation TODOs / Reviewer handoff:
+ - Implementation TODOs / Reviewer handoff:
 	- Run `cargo test`, `npx tsc --noEmit`, and `npm test` to verify no regressions.
 	- Manually verify Transactions page: dropdown shows `Unassigned` + accounts, selecting an account filters transactions, creating a transaction assigns `account_id` appropriately, and the default account is created on first-run when no accounts exist.
 	- Pay attention to the mock behavior in `src/services/tauri-api.ts` when running `npm run dev` — the mock stores accounts/transactions in `localStorage` under `clinchrft:mock:db_v1`.
@@ -56,6 +57,38 @@ npm test
 	- Review how SQLite enforces foreign keys and the interaction of `ON DELETE SET NULL` with soft-deletes.
 	- Consider replacing free-text account/category inputs with `<select>` elements listing current accounts/categories plus an explicit `Unassigned` option.
 - Implementation TODOs / Reviewer handoff:
+	- Frontend changes implemented; reviewer should verify backend `get_transactions` returns `PaginatedTransactions` shape.
+
+---
+
+Change: Frontend — Transactions filtering, paging, and UI wiring
+- One-paragraph summary:
+	- Implemented the frontend portion of server-driven transaction filtering and pagination: added a small `TransactionFilters` component, wired the `Transactions` page to call `getTransactionsPaged(filters)`, and added Prev/Next pagination controls plus loading/empty states. Tests were updated to mock the paged API.
+- Line-by-line explanation:
+	- `src/pages/Transactions.tsx`: added local state for `startDate`, `endDate`, `selectedCategoryId`, `limit`, `offset`, and `total`. Replaced client-side filtering logic with `fetchTransactions()` that calls `getTransactionsPaged(...)` and sets `transactions` from the server response. Added UI wiring for filter apply/clear and changed the Add Transaction flow to re-fetch the current page after mutations.
+	- `src/components/TransactionFilters.tsx`: new presentational component exposing date inputs, category select, and Apply/Clear buttons. It lifts selected values to the parent via callbacks.
+	- `tests/transactions-page.test.tsx`: updated to mock `getTransactionsPaged` and preserved previous behavioral tests (account repair, FK error handling on create).
+- How to run and test locally (commands):
+
+```powershell
+# TypeScript checks
+npx tsc --noEmit
+
+# Run frontend unit tests (Vitest)
+npm test
+
+# Run the app in dev mode
+npm run dev
+```
+- Suggested follow-up learning items:
+	- Add a page-size selector and direct page navigation.
+	- Consider keyset pagination for better performance on large datasets.
+	- Add debounce for free-text memo search and consider FTS for better text search.
+- Reviewer handoff checklist:
+	- Verify that the Tauri backend exposes `get_transactions` returning `{ items, total, limit, offset }`.
+	- Run `npx tsc --noEmit` and `npm test` to validate no regressions.
+	- Manually exercise the Transactions UI in `npm run dev`: apply filters, page forward/back, and confirm expected results.
+
 	- Run `cargo test` and confirm all Rust tests pass.
 	- Run `npx tsc --noEmit` and `npm test` to confirm frontend typechecks and tests pass.
 	- Manually verify Transactions page shows `Unassigned / Deleted` for null/missing account/category and that TransactionForm can save transactions without an account.

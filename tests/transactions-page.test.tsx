@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock the tauri-api module so we can control responses
 var mockGetTransactions: any
+var mockGetTransactionsPaged: any
 var mockGetAccounts: any
 var mockGetCategories: any
 var mockCreateAccount: any
@@ -13,6 +14,7 @@ var mockDeleteTransaction: any
 
 vi.mock('../src/services/tauri-api', () => {
   mockGetTransactions = vi.fn(async () => [])
+  mockGetTransactionsPaged = vi.fn(async () => ({ items: [], total: 0, limit: 50, offset: 0 }))
   mockGetAccounts = vi.fn(async () => [{ id: 'real-1', name: 'Real' }])
   mockGetCategories = vi.fn(async () => [])
   mockCreateAccount = vi.fn(async (name: string) => ({ id: 'real-1', name }))
@@ -22,6 +24,7 @@ vi.mock('../src/services/tauri-api', () => {
 
   return {
     getTransactions: mockGetTransactions,
+    getTransactionsPaged: mockGetTransactionsPaged,
     getAccounts: mockGetAccounts,
     getCategories: mockGetCategories,
     createAccount: mockCreateAccount,

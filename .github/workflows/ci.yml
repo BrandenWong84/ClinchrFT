@@ -100,7 +100,7 @@ jobs:
         run: |
           mkdir -p src-tauri/icons
           if command -v convert >/dev/null 2>&1; then
-            convert -size 1x1 xc:transparent src-tauri/icons/icon.png
+            convert -size 1x1 xc:transparent png32:src-tauri/icons/icon.png
           else
             echo iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAAWgmWQ0AAAAASUVORK5CYII= | base64 -d > src-tauri/icons/icon.png
           fi

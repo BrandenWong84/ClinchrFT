@@ -14,6 +14,9 @@ export default () =>
     }
     ,
     test: {
-      include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}']
+      include: ['tests/**/*.{test,spec}.{ts,tsx,js,jsx}'],
+      environment: 'jsdom'
+      ,
+      setupFiles: ['tests/setupTests.ts']
     }
   })

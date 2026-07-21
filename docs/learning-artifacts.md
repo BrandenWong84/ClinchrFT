@@ -398,6 +398,76 @@ npm test
 **Reviewer Handoff — Test & TSConfig Fixes**
 
 - **Summary:** Updated tests to use `amountCents` and `memo` to match `src/types/index.ts`, and set TypeScript to modern Node resolution (`moduleResolution: node16`, `module: Node16`) with ESM-compatible dynamic imports adjusted in tests.
+
+---
+
+Change: Safe migration for unique account name index (dedupe before index)
+- One-paragraph summary:
+	- Implemented a defensive migration step that removes duplicate `accounts.name` rows before creating the unique index `idx_accounts_name`. This prevents runtime failures when an existing DB contains duplicate account names (for example multiple `default` rows) and ensures first-run migrations succeed even if the DB was populated by older app versions or by race conditions on account creation.
+- Line-by-line explanation:
+	- `db/migrations/0003_unique_account_name.sql`: added a `DELETE FROM accounts WHERE rowid NOT IN (SELECT MIN(rowid) FROM accounts GROUP BY name);` statement before the `CREATE UNIQUE INDEX` so on-disk migrations clean duplicates atomically inside the migration transaction.
+	- `src-tauri/src/db.rs` `run_migrations()`: updated the runtime migration batch to include the same deduplication SQL prior to creating the unique index so that in-memory or runtime DBs are protected during startup.
+	- `src-tauri/src/db.rs` tests: added `migration_dedupes_existing_duplicates()` which constructs an in-memory DB with two rows having the same `name`, runs `run_migrations()`, and asserts only one row remains and the unique index exists; this provides automated verification for the migration behavior.
+- How to run and test locally (commands):
+
+```powershell
+# Rust tests (run inside the repo root or src-tauri)
+cd src-tauri
+cargo test --verbose
+
+# Frontend checks
+npx tsc --noEmit
+npm test
+
+# Run app (manual verification)
+npm run tauri
+# Observe logs: migration should not fail with UNIQUE constraint errors
+```
+- Suggested follow-up learning items or references:
+	- Read about SQLite indexes and behavior when creating unique indexes on columns with pre-existing duplicate values.
+	- Consider adding migration versioning and a file-runner that applies numbered SQL files in order (if you prefer explicit migration control rather than in-code batches).
+- Implementation TODOs / Reviewer handoff:
+	- Run `cargo test` to ensure the new migration test passes on CI and local Windows environment.
+	- Manually verify starting the app against an existing runtime DB containing duplicate `default` accounts no longer errors; ensure only one `default` remains after migration and `idx_accounts_name` exists.
+	- Review whether additional dedupe rules are needed (e.g., prefer rows with non-null `notes` or latest `created_at`) and adjust the SQL accordingly if needed.
+
+
+Change: Filtering & Querying (Transactions)
+- One-paragraph summary:
+	- Added server-driven filtering, pagination, and aggregation helpers to the Tauri/Rust backend and a corresponding frontend service wrapper so the UI can request filtered transaction pages and aggregates. The DB layer now uses parameterized queries with safe bound parameters, creates helpful indexes for `date`, `account_id`, and `category_id`, enforces a `limit` cap, and exposes aggregate endpoints for category/date summaries.
+- Line-by-line explanation:
+	- `src-tauri/src/db.rs`:
+		- Added `GetTransactionsFilter` and `PaginatedTransactions` types to represent request filters and paginated responses.
+		- Added `get_transactions_paginated(...)` which builds a parameterized WHERE clause from present filters, runs a `COUNT(*)` for total, and returns a page of `TransactionRow` items using `LIMIT ? OFFSET ?`.
+		- Added `get_transactions_aggregate_by_category(...)` and `get_transactions_aggregate_by_date(...)` for server-side grouping and aggregation.
+		- Created indexes during `run_migrations()` using `CREATE INDEX IF NOT EXISTS ...` for `date`, `account_id`, and `category_id` to improve query performance.
+	- `src-tauri/src/commands.rs`:
+		- Updated the `get_transactions` Tauri command to accept an optional `GetTransactionsFilter` and return `PaginatedTransactions` so the frontend can request pages and metadata.
+		- Adjusted the commands test to call `get_transactions(None)` and assert against `items`.
+	- `src/services/tauri-api.ts`:
+		- Added typed `TransactionsFilter` and `PaginatedTransactions` types.
+		- Added `getTransactionsPaged(filters?)` wrapper that calls the `get_transactions` Tauri command (or returns a local mock when Tauri is unavailable).
+		- Kept `getTransactions()` as a compatibility wrapper that returns only `items` (so existing consumers continue to work).
+- How to run and test locally (commands):
+
+```powershell
+# TypeScript checks (frontend root)
+npx tsc --noEmit
+
+# Frontend tests
+npm test
+
+# NOTE: Rust tests and full verification should be run by the reviewer (see handoff below).
+``` 
+- Suggested follow-up learning items or references:
+	- SQLite query planning and index usage (`EXPLAIN QUERY PLAN`) to validate the new indexes cover the intended queries.
+	- Rust `rusqlite` parameter binding and `ToSql` types for safe query construction.
+	- UI patterns for paginated lists and debounce for free-text filters.
+- Implementation TODOs / Reviewer handoff:
+	- Run `cd src-tauri && cargo test` and ensure all Rust unit tests compile and pass. Pay attention to new DB functions and the updated command signature.
+	- Run `npx tsc --noEmit` and `npm test` in the repo root to verify no TypeScript or frontend test regressions.
+	- Manually test the Transactions page in a `npm run dev` session wired to Tauri (`npm run tauri`): apply filters, verify pagination, and confirm aggregates return expected totals.
+	- Consider adding more exhaustive unit tests for `get_transactions_paginated` covering combinations of filters (date range, q, amount bounds) and pagination edge-cases.
 - **Files changed:** `tests/tauri-api.test.ts`, `tsconfig.json`, `docs/learning-artifacts.md` (this file).
 - **Why:** Fix TypeScript errors caused by mismatched fixture fields and remove deprecated moduleResolution warnings while keeping ESM-compatible imports.
 - **How to verify (commands):**
@@ -746,6 +816,27 @@ Follow the project's normal PR flow: open `feature/transactions-crud` branch, pu
 		- Reviewer: run `npm test` in CI to confirm both `tests/money.test.ts` and `tests/checker.test.js` pass in your environment.
 		- If CI agents treat `.js` as CommonJS, consider adding `"type": "module"` to `package.json` or renaming test to `checker.test.mjs`.
 		- Confirm no other test files rely on CommonJS `require()`; update them to ESM if needed.
+
+	15) Change: Fix TypeScript test-suite failure and add stable test globals
+	- One-paragraph summary:
+		- Resolved a TS type-check failure (`TS2349`) in tests and intermittent Vitest runtime errors by exposing Vitest ambient types to the TypeScript compiler and providing a stable `localStorage` shim for the test environment. This prevents `npx tsc --noEmit` from failing due to missing test globals and avoids test flakiness caused by missing or polluted `localStorage` across test files.
+	- Line-by-line explanation:
+		- `tsconfig.json`: added `"types": ["node", "vitest"]` so the compiler includes Vitest's ambient declarations; added `"allowJs": true` to allow test imports that include `.js` extension to resolve in the TypeScript build step.
+		- `vite.config.js`: added `test.setupFiles: ['tests/setupTests.ts']` so the localStorage shim runs before tests.
+		- `tests/setupTests.ts`: new file providing a minimal `localStorage` implementation and a `beforeEach` hook that clears storage before every test.
+	- How to run and test locally (commands):
+
+	```powershell
+	npx tsc --noEmit
+	npm test
+	```
+	- Suggested follow-up learning items or references:
+		- Vitest setup files: https://vitest.dev/config/#setupfiles
+		- TypeScript `types` compiler option: https://www.typescriptlang.org/tsconfig#types
+	- Reviewer handoff:
+		- Verify `npx tsc --noEmit` succeeds locally.
+		- Run `npm test` and confirm all tests pass.
+		- If tests still show mixed `.js`/`.ts` resolution problems, consider normalizing imports in tests to omit extensions and remove `allowJs`.
 
 14) Change: Align Vite and `@vitejs/plugin-react` versions to resolve install failure
 
@@ -1218,5 +1309,49 @@ npm test
 	- Please run the validation commands above in a fresh `@reviewer` session and report any failures or unexpected behavior.
 
 ---
+
+	Change: Replace free-text Category with select, hide confusing “Unassigned” option, and polish account UX
+	- One-paragraph summary:
+		- Replaced the free-text Category input with a dropdown and removed the confusing selectable `Unassigned` account option. The `TransactionForm` now accepts an optional `categories` prop from the parent page (preferred) and falls back to `getCategories()` when not provided. Before invoking the backend, the frontend normalizes empty-string `categoryId` to `undefined` so the backend receives a clear null/missing value and foreign-key insertion errors are avoided.
+	- Line-by-line explanation:
+		- `src/components/TransactionForm.tsx`:
+			- Added an optional `categories?: Category[]` prop and prefer `props.categories` when present.
+			- The Category input is a `<select>` rendered as:
+				- `<option value="">No category</option>`
+				- `categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)`
+			- On submit the form maps `categoryId === ''` to `undefined` so the save payload does not contain an empty-string id.
+		- `src/pages/Transactions.tsx`:
+			- Track `categoriesList` in state and pass `categories={categoriesList}` into `TransactionForm` to avoid redundant fetching and ensure the list is consistent across the page.
+			- Account selector placeholder changed from a selectable `Unassigned` option to a disabled placeholder `<option value="" disabled>Choose account</option>` to avoid presenting an ambiguous empty-account choice.
+		- `src/services/tauri-api.ts`:
+			- `createTransaction` and `updateTransaction` sanitize incoming payloads by converting `categoryId === ''` into `undefined` before calling `invoke(...)` or persisting into the localStorage mock.
+		- `tests/transaction-form.test.tsx`:
+			- Added component tests asserting that when "No category" is selected the `onSave` payload contains `categoryId: undefined`, and when a real category is selected the payload includes the selected id.
+	- How to run and test locally (commands):
+
+	```powershell
+	# Install deps if needed
+	npm install
+
+	# Run unit tests
+	npm test
+
+	# Frontend dev
+	npm run dev
+
+	# Full Tauri dev (requires Rust toolchain)
+	npm run tauri
+	```
+	- Suggested follow-up learning items or references:
+		- Consider extracting a `useReferences()` hook to centralize fetching/caching of `accounts` and `categories` for reuse across pages/components.
+		- If UX needs explicit support for an unassigned account, implement a visible `No account` option that maps to `null` rather than relying on an empty-string sentinel.
+	- Implementation TODOs / Reviewer handoff:
+		- Run `npx tsc --noEmit` and `npm test` to verify typechecks and tests pass.
+		- Manually verify the Transactions page behavior:
+			- Category appears as a select populated with categories.
+			- Account dropdown shows a disabled placeholder rather than a selectable empty value.
+			- Creating a transaction with "No category" results in a saved transaction with `category_id` as `NULL`/missing (no FK error).
+		- Check for any code paths that treated `''` as a sentinel value and update to treat `undefined`/`null` as canonical missing values.
+
 
 

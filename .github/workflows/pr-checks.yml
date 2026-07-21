@@ -10,11 +10,16 @@ jobs:
     outputs:
       node-version: 18
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Checkout repository
+        shell: pwsh
+        run: |
+          git init
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git fetch --no-tags --prune --depth=1 origin ${{ github.sha }}
+          git checkout -f ${{ github.sha }}
+      - name: Verify Node
+        shell: pwsh
+        run: node --version || true
       - name: Install deps
         run: npm ci
 
@@ -22,11 +27,16 @@ jobs:
     runs-on: windows-latest
     needs: install
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Checkout repository
+        shell: pwsh
+        run: |
+          git init
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git fetch --no-tags --prune --depth=1 origin ${{ github.sha }}
+          git checkout -f ${{ github.sha }}
+      - name: Verify Node
+        shell: pwsh
+        run: node --version || true
       - name: Install deps
         run: npm ci
       - name: Run API contracts check
@@ -37,11 +47,16 @@ jobs:
     needs: install
     continue-on-error: false
     steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
+      - name: Checkout repository
+        shell: pwsh
+        run: |
+          git init
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git fetch --no-tags --prune --depth=1 origin ${{ github.sha }}
+          git checkout -f ${{ github.sha }}
+      - name: Verify Node
+        shell: pwsh
+        run: node --version || true
       - name: Install deps
         run: npm ci
       - name: Run allowlist checker

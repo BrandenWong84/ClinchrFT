@@ -186,6 +186,15 @@ export async function exportTransactionsCsvData(filter?: TransactionsFilter): Pr
     if (typeof filter !== 'undefined') args.filter = filter
     return core.invoke('export_transactions_csv_data', args) as Promise<string>
   }
+  // In non-Tauri (browser/dev) environments, allow tests or dev harness
+  // to provide a mock implementation via `window.__mockExportData`.
+  try {
+    if (typeof window !== 'undefined' && typeof (window as any).__mockExportData === 'function') {
+      return (window as any).__mockExportData(filter)
+    }
+  } catch (e) {
+    // ignore and fall through to throw below
+  }
   throw new Error('Tauri bridge not available')
 }
 

@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test'
 
 test('export flow uses browser save when available and skips backend export', async ({ page }) => {
-  // Start from local dev server
-  await page.goto('http://localhost:5173')
-
-  // Mock backend exportTransactionsCsvData via window.__mockExports for testability
+  // Ensure mock is injected before the page scripts run
   await page.addInitScript(() => {
     // @ts-ignore
     window.__mockExportData = async function() { return 'col1,col2\n1,2' }
   })
+
+  // Start from local dev server
+  await page.goto('http://localhost:5173')
 
   // Stub showSaveFilePicker to simulate a handle with a createWritable
   await page.evaluate(() => {

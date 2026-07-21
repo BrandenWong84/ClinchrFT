@@ -42,45 +42,4 @@ jobs:
         run: npm run e2e
         env:
           CI: true
-name: CI
-
-on:
-  push:
-    branches: [ "main", "scaffold/init", "feature/**" ]
-  pull_request:
-    branches: [ "main" ]
-
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Install frontend deps
-        run: npm ci
-
-      - name: Run frontend tests
-        run: npx vitest run
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Run Rust tests (if any)
-        working-directory: .
-        shell: bash
-        run: |
-          if [ -f Cargo.toml ] || [ -d src-tauri ]; then
-            cargo test --quiet || true
-          else
-            echo "No Rust tests to run"
-          fi
-      - name: Run allowlist checker
-        run: node scripts/tauri-allowlist-checker.cjs
+ 

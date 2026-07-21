@@ -41,7 +41,12 @@ jobs:
             libxrandr-dev \
             libxinerama-dev \
             libxcursor-dev \
-            libxkbcommon-dev
+            libxkbcommon-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup3.0-dev \
+            gir1.2-webkit2-4.0 \
+            gir1.2-javascriptcoregtk-4.1
 
       - name: Install dependencies
         run: npm ci

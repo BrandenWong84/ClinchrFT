@@ -1,5 +1,39 @@
 ---
 
+Change: CSV Import/Export and Local Backup UX
+- One-paragraph summary:
+	- Implemented CSV export respecting frontend filters, exporting `Account` as account name, `Amount` formatted as dollars (e.g., `1.23`), and a `Transaction ID` header label. The frontend now opens a Save-As dialog (Tauri `dialog.save`) so users choose the export destination; the backend writes to the chosen path. CSV import preview now resolves account names to IDs when possible and returns per-row warnings for unknown account names; apply-import resolves names and inserts transactions inside a DB transaction. Backup/restore commands were also wired to the frontend API.
+- Line-by-line explanation:
+	- `src-tauri/src/commands.rs`: updated `export_transactions_csv(filter: Option<GetTransactionsFilter>, dest_path: Option<String>)` to query filtered transactions, resolve account IDs to names, format amounts to dollars via `format_cents_to_dollars`, write a CSV with header `Transaction ID,Date,Account,Category,Memo,Amount`, and write to `dest_path` when provided. `preview_import_csv` now fetches accounts to map names→ids and returns `account_name` and per-row `errors` when a name is unknown. `apply_import_csv` resolves names (or validates ids) before insert and performs inserts in a DB transaction.
+	- `src/services/tauri-api.ts`: `exportTransactionsCsv` updated to accept optional `destPath` and to pass `dest_path` to the Tauri command. `previewImportCsv`, `applyImportCsv`, `createBackup`, and `restoreBackup` wrappers expose new backend commands.
+	- `src/pages/Transactions.tsx`: the Export button now opens a Tauri Save dialog when available and passes the chosen path to `exportTransactionsCsv`. The export call includes the current filters so the server writes only the filtered set.
+	- `src/components/ImportPreview.tsx`: preview UI updated to display `Account` column, format `amount_cents` into dollar strings using `centsToDollars`, and show per-row error/warning messages returned from the backend preview.
+- How to run and test locally (commands):
+
+```powershell
+# Rust tests
+cd src-tauri
+cargo test
+
+# TypeScript checks and frontend tests (repo root)
+npx tsc --noEmit
+npm test
+
+# Run the app and test export/import UI manually (with Tauri runtime available)
+npm run tauri
+# Use Transactions page: apply filters, click Export, choose a path in Save dialog, and confirm the CSV contains account names and dollar amounts.
+```
+- Suggested follow-up learning items or references:
+	- Review CSV quoting/escaping rules and consider adding configurable column mapping for imports.
+	- Consider adding an account name resolution UI so users can map unknown names to existing accounts during preview.
+	- Audit Tauri allowlist entries when adding more frontend file-system operations (the Save dialog and explicit dest_path are minimal but additional file APIs require justification).
+- Implementation TODOs / Reviewer handoff:
+	- Run `cargo test`, `npx tsc --noEmit`, and `npm test` to verify no regressions.
+	- Manually test export Save-As flow in a Tauri dev window: apply date/account filters and export; verify CSV header `Transaction ID,Date,Account,Category,Memo,Amount`, that `Account` contains account names (not ids), and `Amount` uses decimal dollars (e.g., `1.23`).
+	- Test import preview: load a CSV with an account name that exists and one that does not; verify preview shows resolved `account_name` and adds `unknown account: <name>` error for the missing one; confirm `Confirm Import` fails when unknown account names exist (or update UI to map them in a follow-up change).
+	- Verify backup/restore commands via `createBackup`/`restoreBackup` UI flows (these wrappers exist in `src/services/tauri-api.ts`).
+
+
 Change: Account-selection UX and persistent active account
 - One-paragraph summary:
 	- Implemented a persistent account selector on the Transactions page so users can choose an "active" account. Transactions are created and listed for the selected account by default, and the last selection is persisted in `localStorage` under the key `clinchrft:lastAccountId`. A Tauri command `create_account` was added so the frontend can create a `default` account when the app has no accounts.

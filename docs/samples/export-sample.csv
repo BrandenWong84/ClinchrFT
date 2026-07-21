@@ -1,0 +1,3 @@
+Transaction ID,Date,Account,Category,Memo,Amount
+tx_001,2026-07-20,Cash,Groceries,Milk and eggs,12.50
+tx_002,2026-07-19,Checking,Salary,Paycheck,1500.00

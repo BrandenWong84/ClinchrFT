@@ -1,14 +1,16 @@
 {
-  "timestamp": "2026-07-15T22:03:00.099Z",
+  "timestamp": "2026-07-21T21:24:24.072Z",
   "frontendUses": [
     "invoke",
     "@tauri-api"
   ],
   "frontendModules": [
-    "core"
+    "core",
+    "dialog"
   ],
   "frontendModulesMapped": [
-    "core"
+    "core",
+    "dialog"
   ],
   "rustUses": [
     "tauri_command"
@@ -19,8 +21,16 @@
     "update_transaction",
     "delete_transaction",
     "get_accounts",
+    "create_account",
     "get_categories",
-    "get_app_path"
+    "get_app_path",
+    "show_save_dialog",
+    "preview_import_csv",
+    "apply_import_csv",
+    "export_transactions_csv",
+    "export_transactions_csv_data",
+    "create_backup",
+    "restore_backup"
   ],
   "tauriAllowlist": null,
   "allowAll": false

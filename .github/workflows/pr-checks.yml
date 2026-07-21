@@ -1,0 +1,54 @@
+name: PR Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  install:
+    runs-on: windows-latest
+    outputs:
+      node-version: 18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install deps
+        run: npm ci
+
+  check-api-contracts:
+    runs-on: windows-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install deps
+        run: npm ci
+      - name: Run API contracts check
+        run: npm run check:api-contracts
+
+  allowlist-check:
+    runs-on: windows-latest
+    needs: install
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install deps
+        run: npm ci
+      - name: Run allowlist checker
+        run: node scripts/tauri-allowlist-checker.cjs
+      - name: Upload allowlist report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allowlist-report
+          path: allowlist-report.json

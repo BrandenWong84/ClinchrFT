@@ -167,3 +167,56 @@ export async function deleteTransaction(id: string): Promise<void> {
   s.transactions = s.transactions.filter((t: any) => t.id !== id)
   saveMockState(s)
 }
+
+export async function exportTransactionsCsv(filter?: TransactionsFilter, destPath?: string): Promise<string> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    const args: any = {}
+    if (typeof filter !== 'undefined') args.filter = filter
+    if (typeof destPath !== 'undefined') args.dest_path = destPath
+    return core.invoke('export_transactions_csv', args) as Promise<string>
+  }
+  throw new Error('Tauri bridge not available')
+}
+
+export async function exportTransactionsCsvData(filter?: TransactionsFilter): Promise<string> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    const args: any = {}
+    if (typeof filter !== 'undefined') args.filter = filter
+    return core.invoke('export_transactions_csv_data', args) as Promise<string>
+  }
+  throw new Error('Tauri bridge not available')
+}
+
+export async function previewImportCsv(csvText: string): Promise<any> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    return core.invoke('preview_import_csv', { csvText: csvText }) as Promise<any>
+  }
+  throw new Error('Tauri bridge not available')
+}
+
+export async function applyImportCsv(csvText: string): Promise<number> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    return core.invoke('apply_import_csv', { csvText: csvText }) as Promise<number>
+  }
+  throw new Error('Tauri bridge not available')
+}
+
+export async function createBackup(destPath: string): Promise<string> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    return core.invoke('create_backup', { dest_path: destPath }) as Promise<string>
+  }
+  throw new Error('Tauri bridge not available')
+}
+
+export async function restoreBackup(srcPath: string): Promise<void> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    return core.invoke('restore_backup', { src_path: srcPath }) as Promise<void>
+  }
+  throw new Error('Tauri bridge not available')
+}

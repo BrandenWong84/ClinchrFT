@@ -4,6 +4,9 @@ import { getTransactionsPaged, createTransaction, updateTransaction, deleteTrans
 import TransactionList from '../components/TransactionList'
 import TransactionForm from '../components/TransactionForm'
 import TransactionFilters from '../components/TransactionFilters'
+import ImportPreview from '../components/ImportPreview'
+import { exportTransactionsCsv, exportTransactionsCsvData } from '../services/tauri-api'
+import { detectTauriDialog, invokeSafely } from '../services/tauri-helpers'
 
 const LAST_ACCOUNT_KEY = 'clinchrft:lastAccountId'
 
@@ -17,12 +20,15 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Transaction | null>(null)
   const [showForm, setShowForm] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [selectedAccountId, setSelectedAccountId] = useState<string>('')
   const [startDate, setStartDate] = useState<string | undefined>(undefined)
   const [endDate, setEndDate] = useState<string | undefined>(undefined)
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined)
   const [limit, setLimit] = useState<number>(50)
   const [offset, setOffset] = useState<number>(0)
+  const [debugApiInfo, setDebugApiInfo] = useState<string | null>(null)
+  const [showApiDebug, setShowApiDebug] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -160,7 +166,67 @@ export default function TransactionsPage() {
           onApply={() => { setOffset(0); fetchTransactions({ start: startDate, end: endDate, accountId: selectedAccountId || undefined, categoryId: selectedCategoryId, limit, offset: 0 }) }}
           onClear={() => { setStartDate(undefined); setEndDate(undefined); setSelectedCategoryId(undefined); setOffset(0); fetchTransactions({ start: undefined, end: undefined, accountId: selectedAccountId || undefined, categoryId: undefined, limit, offset: 0 }) }}
         />
-        <div style={{marginTop:8, display:'flex', gap:12, alignItems:'center'}}>
+          <div style={{marginTop:8}}>
+            <button onClick={async () => {
+              try {
+                let dest: string | undefined = undefined
+                let browserSaved = false
+                const suggested = `transactions-${new Date().toISOString().replace(/[:.]/g,'')}.csv`
+
+                // Try browser-native save picker first (must be invoked during user activation).
+                try {
+                  // @ts-ignore
+                  if (typeof (window as any).showSaveFilePicker === 'function') {
+                    const csv = await exportTransactionsCsvData({ startDate: startDate, endDate: endDate, accountId: selectedAccountId || undefined, categoryId: selectedCategoryId })
+                    // @ts-ignore
+                    const handle = await (window as any).showSaveFilePicker({ suggestedName: suggested, types: [{ description: 'CSV', accept: { 'text/csv': ['.csv'] } }] })
+                    const writable = await handle.createWritable()
+                    await writable.write(csv)
+                    await writable.close()
+                    alert('Exported via browser save')
+                    browserSaved = true
+                    dest = undefined
+                  }
+                } catch (e) {
+                  console.warn('browser save fallback failed', e)
+                }
+
+                // If browser save didn't happen, try Tauri dialog via centralized helper
+                if (!browserSaved) {
+                  try {
+                    const { dialog, info } = await detectTauriDialog()
+                    if (showApiDebug) setDebugApiInfo(JSON.stringify(info))
+                    if (dialog && typeof dialog.save === 'function') {
+                      const p = await dialog.save({ defaultPath: suggested })
+                      if (p) dest = p
+                    } else {
+                      console.warn('Tauri dialog.save not available; exporting to default app path')
+                      if (!browserSaved) alert('Save dialog unavailable; export will be written to the app data folder instead.')
+                    }
+                  } catch (e) {
+                    console.warn('detectTauriDialog failed', e)
+                    if (showApiDebug) setDebugApiInfo(String(e))
+                  }
+                }
+                if (!browserSaved) {
+                  const p2 = await exportTransactionsCsv({ startDate: startDate, endDate: endDate, accountId: selectedAccountId || undefined, categoryId: selectedCategoryId }, dest)
+                  alert('Exported to: ' + p2)
+                }
+              } catch (e: any) { alert('Export failed: ' + String(e)) }
+            }}>Export</button>
+            <label style={{marginLeft:8}}>
+              <input type="checkbox" checked={showApiDebug} onChange={e => { setShowApiDebug(e.target.checked); if (!e.target.checked) setDebugApiInfo(null) }} /> Show debug
+            </label>
+            <button onClick={() => setShowImport(true)} style={{marginLeft:8}}>Import</button>
+          </div>
+          {showApiDebug && debugApiInfo && (
+            <div style={{marginTop:8, padding:8, background:'#fffbe6', border:'1px solid #ffd966'}}>
+              <strong>Debug: @tauri-apps/api</strong>
+              <pre style={{whiteSpace:'pre-wrap', margin:0}}>{debugApiInfo}</pre>
+            </div>
+          )}
+
+          <div style={{marginTop:8, display:'flex', gap:12, alignItems:'center'}}>
           <label>
             Account:{' '}
             <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); localStorage.setItem(LAST_ACCOUNT_KEY, e.target.value); fetchTransactions({ accountId: e.target.value || undefined, limit, offset: 0 }) }}>
@@ -188,6 +254,9 @@ export default function TransactionsPage() {
           <h3>{editing ? 'Edit' : 'Add'} Transaction</h3>
           <TransactionForm initial={editing || undefined} categories={categoriesList} selectedAccountId={selectedAccountId} onCancel={() => { setShowForm(false); setEditing(null) }} onSave={editing ? handleUpdate : handleCreate} />
         </div>
+      )}
+      {showImport && (
+        <ImportPreview onCancel={() => setShowImport(false)} onDone={async (n) => { setShowImport(false); if (n > 0) { alert('Imported ' + n + ' rows'); await load() } }} />
       )}
     </div>
   )

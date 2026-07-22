@@ -102,6 +102,55 @@ pub fn get_categories() -> Result<Vec<CategoryRow>, String> {
     crate::db::get_categories(&conn).map_err(|e| format!("DB query error: {}", e))
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DateAggregateRow {
+    pub bucket: String,
+    pub category_id: Option<String>,
+    pub total_amount_cents: i64,
+}
+
+#[command]
+pub fn get_transactions_aggregate_by_category(filter: Option<GetTransactionsFilter>) -> Result<Vec<crate::db::CategoryAggregate>, String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    let f = filter.unwrap_or(GetTransactionsFilter { start_date: None, end_date: None, account_id: None, category_id: None, min_amount_cents: None, max_amount_cents: None, q: None, sort_by: None, sort_dir: None, limit: None, offset: None });
+    crate::db::get_transactions_aggregate_by_category(&conn, f.start_date, f.end_date, f.account_id).map_err(|e| format!("DB query error: {}", e))
+}
+
+#[command]
+pub fn get_transactions_aggregate_by_date(filter: Option<GetTransactionsFilter>, interval: String) -> Result<Vec<DateAggregateRow>, String> {
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+    // Build SQL to return flattened rows: bucket, category_id, total_amount_cents
+    let f = filter.unwrap_or(GetTransactionsFilter { start_date: None, end_date: None, account_id: None, category_id: None, min_amount_cents: None, max_amount_cents: None, q: None, sort_by: None, sort_dir: None, limit: None, offset: None });
+    let mut where_clauses: Vec<String> = Vec::new();
+    let mut params_vec: Vec<rusqlite::types::Value> = Vec::new();
+    if let Some(sd) = f.start_date { where_clauses.push("date >= ?".to_string()); params_vec.push(rusqlite::types::Value::from(sd)); }
+    if let Some(ed) = f.end_date { where_clauses.push("date <= ?".to_string()); params_vec.push(rusqlite::types::Value::from(ed)); }
+    if let Some(acc) = f.account_id { where_clauses.push("account_id = ?".to_string()); params_vec.push(rusqlite::types::Value::from(acc)); }
+    if let Some(cat) = f.category_id { where_clauses.push("category_id = ?".to_string()); params_vec.push(rusqlite::types::Value::from(cat)); }
+    let where_sql = if where_clauses.is_empty() { "".to_string() } else { format!("WHERE {}", where_clauses.join(" AND ")) };
+
+    let date_fmt = match interval.as_str() {
+        "month" => "%Y-%m",
+        "year" => "%Y",
+        "week" => "%Y-%W",
+        _ => "%Y-%m-%d",
+    };
+
+    let sql = format!("SELECT strftime('{}', date) as bucket, category_id, SUM(amount_cents) as total_amount_cents FROM transactions {} GROUP BY bucket, category_id ORDER BY bucket", date_fmt, where_sql);
+    let mut stmt = conn.prepare(&sql).map_err(|e| format!("DB prepare error: {}", e))?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(params_vec.into_iter()), |r| {
+            Ok(DateAggregateRow { bucket: r.get(0)?, category_id: r.get(1)?, total_amount_cents: r.get(2)? })
+        })
+        .map_err(|e| format!("DB query_map error: {}", e))?
+        .collect::<Result<Vec<_>, rusqlite::Error>>()
+        .map_err(|e| format!("DB map collect error: {}", e))?;
+    Ok(rows)
+}
+
 #[command]
 pub fn get_app_path() -> String {
     let proj_dirs = directories::ProjectDirs::from("com", "example", "ClinchrFT").unwrap();
@@ -109,7 +158,8 @@ pub fn get_app_path() -> String {
 }
 
 #[command]
-pub fn show_save_dialog(default_name: Option<String>) -> Result<Option<String>, String> {
+#[allow(dead_code)]
+pub fn show_save_dialog(_default_name: Option<String>) -> Result<Option<String>, String> {
     // removed: previous implementation relied on rfd which caused native link conflicts.
     // Keep this command unimplemented to avoid build issues; prefer JS/browser fallback.
     Err("native save dialog not available".into())
@@ -136,6 +186,30 @@ pub struct ImportPreviewResult {
     pub good: usize,
     pub errors: usize,
     pub warnings: usize,
+}
+
+#[command]
+pub fn seed_dev_data() -> Result<String, String> {
+    // Inserts sample accounts, categories and transactions into the repo DB.
+    // Useful for local/dev only; idempotent for simple re-seeding.
+    let path = db_path();
+    let conn = open_db(&path).map_err(|e| format!("DB open error: {}", e))?;
+
+    // Create sample account
+    let acc = crate::db::insert_account(&conn, "Dev Account", None).map_err(|e| format!("insert account: {}", e))?;
+
+    // Create sample categories
+    let food = crate::db::insert_category(&conn, "Food", None, None).map_err(|e| format!("insert category: {}", e))?;
+    let transport = crate::db::insert_category(&conn, "Transport", None, None).map_err(|e| format!("insert category: {}", e))?;
+    let groceries = crate::db::insert_category(&conn, "Groceries", None, None).map_err(|e| format!("insert category: {}", e))?;
+
+    // Insert some transactions
+    let _ = crate::db::insert_transaction(&conn, CreateTransaction { account_id: Some(acc.id.clone()), category_id: Some(food.id.clone()), amount_cents: 12300, memo: Some("Lunch".into()), date: "2026-07-01".into() }).map_err(|e| format!("insert tx: {}", e))?;
+    let _ = crate::db::insert_transaction(&conn, CreateTransaction { account_id: Some(acc.id.clone()), category_id: Some(transport.id.clone()), amount_cents: 5000, memo: Some("Bus".into()), date: "2026-07-02".into() }).map_err(|e| format!("insert tx: {}", e))?;
+    let _ = crate::db::insert_transaction(&conn, CreateTransaction { account_id: Some(acc.id.clone()), category_id: Some(groceries.id.clone()), amount_cents: 2500, memo: Some("Groceries".into()), date: "2026-07-03".into() }).map_err(|e| format!("insert tx: {}", e))?;
+    let _ = crate::db::insert_transaction(&conn, CreateTransaction { account_id: Some(acc.id.clone()), category_id: None, amount_cents: 7000, memo: Some("Misc".into()), date: "2026-07-04".into() }).map_err(|e| format!("insert tx: {}", e))?;
+
+    Ok("seeded".into())
 }
 
 fn parse_amount_to_cents(s: &str) -> Result<i64, String> {
@@ -470,7 +544,7 @@ mod tests {
         let headers = rdr.headers().expect("headers").clone();
         assert_eq!(headers.iter().collect::<Vec<_>>(), vec!["Transaction ID","Date","Account","Category","Memo","Amount"]);
 
-        let mut rows = rdr.records().map(|r| r.expect("rec")).collect::<Vec<_>>();
+        let rows = rdr.records().map(|r| r.expect("rec")).collect::<Vec<_>>();
         // should contain only the two in-range transactions
         assert_eq!(rows.len(), 2);
 
@@ -479,5 +553,38 @@ mod tests {
         // columns: id,date,account,category,memo,amount
         assert!(first.get(2).unwrap() == "Checking" || first.get(2).unwrap() == "Savings");
         assert!(first.get(5).unwrap() == "1.23" || first.get(5).unwrap() == "2.50");
+    }
+
+    #[test]
+    #[serial]
+    fn aggregate_commands_return_expected_totals() {
+        // create temp DB and point commands at it
+        let tmp_db = NamedTempFile::new().expect("tempfile db");
+        std::env::set_var("CLINCHRFT_DB_PATH", tmp_db.path().to_string_lossy().to_string());
+
+        // open and seed DB
+        let path = std::env::var("CLINCHRFT_DB_PATH").unwrap();
+        let conn = crate::db::open_db(std::path::Path::new(&path)).expect("open db");
+        let acc = crate::db::insert_account(&conn, "A1", None).expect("insert acc");
+        let cat_food = crate::db::insert_category(&conn, "Food", None, None).expect("insert cat");
+
+        // insert transactions across two dates
+        let _t1 = crate::db::insert_transaction(&conn, CreateTransaction { account_id: Some(acc.id.clone()), category_id: Some(cat_food.id.clone()), amount_cents: 100, memo: Some("t1".into()), date: "2026-07-01".into() }).expect("insert t1");
+        let _t2 = crate::db::insert_transaction(&conn, CreateTransaction { account_id: Some(acc.id.clone()), category_id: None, amount_cents: 50, memo: Some("t2".into()), date: "2026-07-01".into() }).expect("insert t2");
+        let _t3 = crate::db::insert_transaction(&conn, CreateTransaction { account_id: Some(acc.id.clone()), category_id: Some(cat_food.id.clone()), amount_cents: 200, memo: Some("t3".into()), date: "2026-07-02".into() }).expect("insert t3");
+
+        // call aggregate by category
+        let filter = GetTransactionsFilter { start_date: Some("2026-07-01".into()), end_date: Some("2026-07-31".into()), account_id: None, category_id: None, min_amount_cents: None, max_amount_cents: None, q: None, sort_by: None, sort_dir: None, limit: None, offset: None };
+        let cat_res = get_transactions_aggregate_by_category(Some(filter)).expect("agg failed");
+        // Expect two aggregates: one for Food and one for null/uncategorized
+        assert!(cat_res.iter().any(|a| a.category_id.as_deref() == Some(&cat_food.id) && a.total_amount_cents == 300));
+        assert!(cat_res.iter().any(|a| a.category_id.is_none() && a.total_amount_cents == 50));
+
+        // call aggregate by date (day) - command returns flattened rows per bucket+category
+        let date_res = get_transactions_aggregate_by_date(None, "day".to_string()).expect("date agg failed");
+        // Expect a row for 2026-07-01 + Food (100) and 2026-07-01 + null (50)
+        assert!(date_res.iter().any(|r| r.bucket == "2026-07-01" && r.category_id.as_deref() == Some(&cat_food.id) && r.total_amount_cents == 100));
+        assert!(date_res.iter().any(|r| r.bucket == "2026-07-01" && r.category_id.is_none() && r.total_amount_cents == 50));
+        assert!(date_res.iter().any(|r| r.bucket == "2026-07-02" && r.category_id.as_deref() == Some(&cat_food.id) && r.total_amount_cents == 200));
     }
 }

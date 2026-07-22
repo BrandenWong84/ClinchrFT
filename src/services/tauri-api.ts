@@ -105,6 +105,42 @@ export async function getCategories(): Promise<Category[]> {
   return s.categories as Category[]
 }
 
+export type CategoryAggregate = { categoryId?: string; totalAmountCents: number }
+export type DateAggregateRow = { bucket: string; categoryId?: string; totalAmountCents: number }
+
+export async function getTransactionsAggregateByCategory(filter?: TransactionsFilter): Promise<CategoryAggregate[]> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    const args: any = {}
+    if (typeof filter !== 'undefined') args.filter = filter
+    return core.invoke('get_transactions_aggregate_by_category', args) as Promise<CategoryAggregate[]>
+  }
+  // non-Tauri: return empty
+  return []
+}
+
+export async function getTransactionsAggregateByDate(filter: TransactionsFilter | undefined, interval: 'day'|'week'|'month'|'year') : Promise<DateAggregateRow[]> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    const args: any = { interval }
+    if (typeof filter !== 'undefined') args.filter = filter
+    return core.invoke('get_transactions_aggregate_by_date', args) as Promise<DateAggregateRow[]>
+  }
+  return []
+}
+
+export async function seedDevData(): Promise<string> {
+  if (isTauriAvailable()) {
+    const core = await import('@tauri-apps/api/core')
+    return core.invoke('seed_dev_data') as Promise<string>
+  }
+  if (process.env.NODE_ENV === 'production') throw new Error('Tauri bridge not available')
+  // In non-tauri dev, optionally seed mock state
+  const s = await ensureMockInitialized()
+  // no-op for now (mock seeding not implemented)
+  return 'mock-seeded'
+}
+
 export async function createAccount(name: string, notes?: string): Promise<Account> {
   if (isTauriAvailable()) {
     const core = await import('@tauri-apps/api/core')

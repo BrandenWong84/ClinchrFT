@@ -100,6 +100,12 @@ pub struct DateAggregate {
     pub total_amount_cents: i64,
 }
 
+// Some helpers are currently unused by the Rust-side code but are intentionally
+// provided for completeness and future use via the Tauri command layer. Silence
+// dead-code warnings until those functions are wired up.
+#[allow(dead_code)]
+
+
 pub fn get_transactions_paginated(conn: &Connection, filter: Option<GetTransactionsFilter>) -> Result<PaginatedTransactions> {
     let f = filter.unwrap_or(GetTransactionsFilter {
         start_date: None,
@@ -621,5 +627,79 @@ COMMIT;",
             .unwrap();
         let idx_count: i64 = idx_stmt.query_row([], |r| r.get(0)).unwrap();
         assert_eq!(idx_count, 1, "expected idx_accounts_name to exist after migration");
+    }
+
+    #[test]
+    fn aggregates_by_date_runs() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let acc = insert_account(&conn, "agg-acc", None).unwrap();
+        let cat = insert_category(&conn, "agg-cat", None, None).unwrap();
+
+        insert_transaction(
+            &conn,
+            CreateTransaction {
+                account_id: Some(acc.id.clone()),
+                category_id: Some(cat.id.clone()),
+                amount_cents: 100,
+                memo: Some("t1".into()),
+                date: "2020-01-15".into(),
+            },
+        )
+        .unwrap();
+
+        insert_transaction(
+            &conn,
+            CreateTransaction {
+                account_id: Some(acc.id.clone()),
+                category_id: Some(cat.id.clone()),
+                amount_cents: 200,
+                memo: Some("t2".into()),
+                date: "2020-02-03".into(),
+            },
+        )
+        .unwrap();
+
+        let res = get_transactions_aggregate_by_date(&conn, Some("2020-01-01".into()), Some("2020-12-31".into()), "month");
+        assert!(res.is_ok());
+        let v = res.unwrap();
+        assert!(v.len() >= 2, "expected at least two monthly buckets");
+        assert!(v.iter().any(|d| d.date == "2020-01"));
+        assert!(v.iter().any(|d| d.date == "2020-02"));
+    }
+
+    #[test]
+    fn update_and_delete_account_roundtrip() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let acc = insert_account(&conn, "acct1", None).unwrap();
+        let updated = update_account(&conn, &acc.id, Some("acct1-renamed".into()), Some(Some("notes".into())))
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.name, "acct1-renamed");
+
+        delete_account(&conn, &acc.id).unwrap();
+        let all = get_accounts(&conn).unwrap();
+        let found = all.into_iter().find(|a| a.id == acc.id).unwrap();
+        assert!(found.deleted_at.is_some());
+    }
+
+    #[test]
+    fn update_and_delete_category_roundtrip() {
+        let conn = Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+
+        let cat = insert_category(&conn, "cat1", None, None).unwrap();
+        let updated = update_category(&conn, &cat.id, Some("cat1-renamed".into()), None, Some(Some("cnotes".into())))
+            .unwrap()
+            .unwrap();
+        assert_eq!(updated.name, "cat1-renamed");
+
+        delete_category(&conn, &cat.id).unwrap();
+        let all = get_categories(&conn).unwrap();
+        let found = all.into_iter().find(|c| c.id == cat.id).unwrap();
+        assert!(found.deleted_at.is_some());
     }
 }

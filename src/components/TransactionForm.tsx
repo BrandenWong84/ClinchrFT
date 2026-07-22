@@ -48,7 +48,7 @@ export default function TransactionForm({ initial = {}, onCancel, onSave, select
   }, [propCategories])
 
   return (
-    <form onSubmit={submit} style={{display: 'grid', gap:8}}>
+    <form onSubmit={submit} className="form-grid">
       {/* Account selection is provided by the Transactions page; no free-text account input allowed. */}
       <label>Category
         <select value={categoryId} onChange={e => setCategoryId(e.target.value)}>
@@ -68,8 +68,8 @@ export default function TransactionForm({ initial = {}, onCancel, onSave, select
         <input value={memo} onChange={e => setMemo(e.target.value)} />
       </label>
       <div>
-        <button type="submit">Save</button>
-        {onCancel && <button type="button" onClick={onCancel} style={{marginLeft:8}}>Cancel</button>}
+        <button className="btn" type="submit">Save</button>
+        {onCancel && <button className="btn ml-8" type="button" onClick={onCancel}>Cancel</button>}
       </div>
     </form>
   )

@@ -13,7 +13,7 @@ type Props = {
 export default function TransactionList({ transactions, accountsMap = {}, categoriesMap = {}, onEdit, onDelete }: Props) {
   if (!transactions.length) return <div>No transactions</div>
   return (
-    <table style={{width: '100%'}}>
+    <table className="table-full">
       <thead>
         <tr><th>Date</th><th>Account</th><th>Category</th><th>Memo</th><th>Amount</th><th></th></tr>
       </thead>
@@ -24,10 +24,10 @@ export default function TransactionList({ transactions, accountsMap = {}, catego
             <td>{t.accountId ? (accountsMap[t.accountId] ?? 'Unassigned / Deleted') : 'Unassigned / Deleted'}</td>
             <td>{t.categoryId ? (categoriesMap[t.categoryId] ?? 'Unassigned / Deleted') : 'Unassigned / Deleted'}</td>
             <td>{t.memo}</td>
-            <td style={{textAlign: 'right'}}>{centsToDollars(t.amountCents)}</td>
+            <td className="text-right">{centsToDollars(t.amountCents)}</td>
             <td>
-              <button onClick={() => onEdit(t)}>Edit</button>
-              <button onClick={() => onDelete(t.id)} style={{marginLeft:8}}>Delete</button>
+              <button className="btn" onClick={() => onEdit(t)}>Edit</button>
+              <button className="btn ml-8" onClick={() => onDelete(t.id)}>Delete</button>
             </td>
           </tr>
         ))}

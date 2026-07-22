@@ -38,15 +38,15 @@ export default function ImportPreview({ onDone, onCancel }: Props) {
   }
 
   return (
-    <div style={{border: '1px solid #ccc', padding:12, marginTop:12}}>
+    <div className="card">
       <h3>Import CSV</h3>
       <input type="file" accept=".csv,text/csv" onChange={handleFile} />
       {loading && <div>Working...</div>}
       {preview && (
-        <div style={{marginTop:8}}>
+        <div className="mt-8">
           <div>Good: {preview.good} Errors: {preview.errors} Warnings: {preview.warnings}</div>
-          <div style={{maxHeight:200, overflow:'auto', marginTop:8}}>
-            <table style={{width:'100%', borderCollapse:'collapse'}}>
+          <div className="mt-8 scroll-max-200">
+            <table className="table-full">
               <thead><tr><th>#</th><th>Date</th><th>Account</th><th>Amount</th><th>Memo</th><th>Errors</th></tr></thead>
               <tbody>
                 {preview.rows.slice(0,50).map((r: any) => {
@@ -67,14 +67,14 @@ export default function ImportPreview({ onDone, onCancel }: Props) {
               </tbody>
             </table>
           </div>
-          <div style={{marginTop:8}}>
-            <button onClick={handleApply}>Confirm Import</button>
-            <button onClick={onCancel} style={{marginLeft:8}}>Cancel</button>
+          <div className="mt-8">
+            <button className="btn" onClick={handleApply}>Confirm Import</button>
+            <button className="btn ml-8" onClick={onCancel}>Cancel</button>
           </div>
         </div>
       )}
-      <div style={{marginTop:8}}>
-        <button onClick={onCancel}>Close</button>
+      <div className="mt-8">
+        <button className="btn" onClick={onCancel}>Close</button>
       </div>
     </div>
   )

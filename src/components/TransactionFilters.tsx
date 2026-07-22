@@ -18,7 +18,7 @@ type Props = {
 
 export default function TransactionFilters({ startDate, endDate, onStartDateChange, onEndDateChange, accounts, categories, accountId, categoryId, onAccountChange, onCategoryChange, onApply, onClear }: Props) {
   return (
-    <div style={{display:'flex', gap:12, alignItems:'center'}}>
+    <div className="row">
       <label>
         Start:{' '}
         <input type="date" value={startDate ?? ''} onChange={e => onStartDateChange(e.target.value || undefined)} />
@@ -34,8 +34,8 @@ export default function TransactionFilters({ startDate, endDate, onStartDateChan
           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </label>
-      <button onClick={onApply}>Apply</button>
-      <button onClick={onClear}>Clear</button>
+      <button className="btn" onClick={onApply}>Apply</button>
+      <button className="btn ml-8" onClick={onClear}>Clear</button>
     </div>
   )
 }

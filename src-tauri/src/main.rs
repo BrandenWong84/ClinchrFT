@@ -14,6 +14,11 @@ fn main() {
                 commands::create_account,
             commands::get_categories,
             commands::get_app_path,
+            // Aggregates for visualizations
+            commands::get_transactions_aggregate_by_category,
+            commands::get_transactions_aggregate_by_date,
+            // Dev helpers
+            commands::seed_dev_data,
             // CSV import/export and backup/restore
             commands::preview_import_csv,
             commands::apply_import_csv,

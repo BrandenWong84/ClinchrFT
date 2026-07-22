@@ -1,5 +1,78 @@
 ---
 
+Change: Wire Dashboard into React Router
+- One-paragraph summary:
+	- Replaced App's manual state-based navigation with `react-router-dom` so `Transactions` and `Dashboard` are reachable via real URLs (`/transactions`, `/dashboard`). This enables deep-linking, browser history (back/forward), and easier integration with query-params-driven `FiltersProvider` for shared filter state.
+- Line-by-line explanation:
+	- `package.json`: added `react-router-dom` dependency to the frontend so routing primitives are available in the renderer.
+	- `src/App.tsx`: replaced the local `route` state with a `BrowserRouter` and `Routes`. Navigation buttons were converted to `<Link>` wrappers that change the URL instead of app state. The app now declares routes:
+		- `/` redirects to `/transactions` (using `<Navigate replace />`).
+		- `/transactions` renders `TransactionsPage`.
+		- `/dashboard` renders `DashboardPage`.
+		- `FiltersProvider` remains a top-level provider inside the router so both pages share URL-synced filter state.
+	- `src/main.tsx`: no functional change — `App` is still mounted as the root component; router now lives inside `App`.
+- How to run and test locally (commands):
+
+```powershell
+# Install new dependency then run type-check and tests
+npm install
+npx tsc --noEmit
+npm test
+
+# Run dev server and manually verify routes
+npm run dev
+# open http://localhost:5173/transactions and http://localhost:5173/dashboard
+
+# Full Tauri dev (desktop + backend)
+npm run tauri
+```
+- Suggested follow-ups:
+	- Add `useSearchParams` in `FiltersProvider` consumers to centralize query param handling for advanced filters (sorting, paging, additional facets).
+	- Consider server-side route guards or authorization wrappers if/when multi-user or protected routes are introduced.
+	- Replace `BrowserRouter` with `MemoryRouter` in tests where a controlled history is preferable (Vitest + jsdom).
+- Reviewer handoff / TODOs:
+	- Run `npx tsc --noEmit` and `npm test` to validate no regressions (CI should run the same commands).
+	- Manually navigate to `/dashboard` and ensure the Dashboard loads and responds to filters; test that deep-linked URLs (e.g., `/dashboard?start=2026-07-01&cat=c1`) load with the expected filter state.
+	- Confirm `FiltersProvider` continues to sync filter state to query params as expected across route changes.
+
+Change: Visualizations Dashboard
+- One-paragraph summary:
+	- Added a Dashboard page with basic visualizations (pie and stacked-bar views) driven by a shared `FiltersContext` synchronized to the URL. Backend Tauri command wrappers were added to expose aggregated endpoints; frontend wrappers and simple visualization components were implemented to display aggregated results. Learning artifacts and run/test instructions included.
+- Line-by-line explanation:
+	- `src-tauri/src/commands.rs`: added `get_transactions_aggregate_by_category` and `get_transactions_aggregate_by_date` Tauri command wrappers and `DateAggregateRow` serialization shape. The date aggregate wrapper flattens rows into `{ bucket, category_id, total_amount_cents }` using `strftime` with formats for day/month/year/week.
+	- `src/services/tauri-api.ts`: added `getTransactionsAggregateByCategory` and `getTransactionsAggregateByDate` TypeScript wrappers and associated result types (`CategoryAggregate`, `DateAggregateRow`). These call Tauri commands when available and return empty arrays in non-Tauri dev mode.
+	- `src/lib/filters.tsx`: implemented `FiltersProvider` and `useFilters()` hook. Filters are synced to the URL query params (`start`, `end`, `cat`) for deep-linking and restored on load.
+	- `src/pages/Dashboard.tsx`: Dashboard page consumes `useFilters()` and fetches aggregates, rendering either `PieChartView` or `StackedBarView` depending on the selected chart mode. It also fetches categories for legend mapping.
+	- `src/components/VisualizationToolbar.tsx`: toolbar reuses `TransactionFilters` for date/category inputs and includes chart toggle and bucket selector.
+	- `src/components/PieChartView.tsx` & `src/components/StackedBarView.tsx`: simple, testable presentational components that render aggregate data and formatted currency using `src/lib/money.ts` helpers.
+
+- How to run and test locally (commands):
+
+```powershell
+# Rust tests (backend)
+cd src-tauri
+cargo test
+
+# TypeScript checks and frontend tests (repo root)
+npx tsc --noEmit
+npm test
+
+# Run frontend dev server
+npm run dev
+
+# Run full Tauri dev (requires Rust toolchain + Windows/MSVC)
+npm run tauri
+```
+
+- Suggested follow-ups:
+	- Replace the simple list-based chart views with `recharts` or `react-chartjs-2` for interactive SVG charts and hover tooltips.
+	- Add frontend tests for `FiltersProvider` URL sync and component tests for `VisualizationToolbar`, `PieChartView`, and `StackedBarView`.
+
+- Reviewer handoff / next steps:
+	- Run `cargo test`, `npx tsc --noEmit`, and `npm test`.
+	- Verify `Dashboard` loads and updates when changing filters in Transactions or Dashboard.
+	- Consider adding E2E Playwright tests that assert bi-directional filter sync between pages.
+
 Change: CSV Import/Export and Local Backup UX
 - One-paragraph summary:
 	- Implemented CSV export respecting frontend filters, exporting `Account` as account name, `Amount` formatted as dollars (e.g., `1.23`), and a `Transaction ID` header label. The frontend now opens a Save-As dialog (Tauri `dialog.save`) so users choose the export destination; the backend writes to the chosen path. CSV import preview now resolves account names to IDs when possible and returns per-row warnings for unknown account names; apply-import resolves names and inserts transactions inside a DB transaction. Backup/restore commands were also wired to the frontend API.
@@ -234,6 +307,49 @@ npm run tauri
  - Reviewer next steps / handoff to `@reviewer`:
 	 - Pull the change, run the commands above on Windows, and confirm `npm run tauri` completes without the previous EBUSY watcher error.
 	 - If the error persists, capture the dev logs and consider also excluding other generated folders (e.g., `**/target/**`), or running the frontend and Cargo builds as separate processes during development.
+
+
+Change: Visualizations Dashboard — UX fixes, grouping, and consistent coloring
+- One-paragraph summary:
+	- Improved the Dashboard visualizations by grouping aggregates by display name (so multiple category ids with the same friendly name are combined), stabilizing color assignment per display key, eliminating duplicate legend controls, moving the legend outside chart sizing wrappers so charts render reliably, and formatting stacked-bar Y-axis ticks as dollars instead of cents. Also added a dev-only `seedDevData` command to populate sample data for manual QA.
+- Line-by-line explanation:
+	- `src/components/PieChartView.tsx`: group incoming category aggregates by display name (collapse duplicate names), assign a stable per-group `fill` color, render `Cell` fills using that `fill`, remove duplicate inline legend buttons and rely on a single `CustomLegend` component, and ensure the `visible` toggle map merges new keys when data updates so charts render on route entry.
+	- `src/components/StackedBarView.tsx`: pivot date-aggregate rows by display name (so stacks aggregate same-named categories), use a `colorMap` keyed by display name for Bar fills, move `CustomLegend` outside of `ResponsiveContainer` so the chart sizing is correct, and format `YAxis` ticks using `centsToDollars` so axis labels match tooltip formatting.
+	- `src/pages/Dashboard.tsx`: dashboard wiring to fetch aggregates and categories, and dev-only `Seed Dev Data` button which invokes `seedDevData()` and refreshes aggregates and categories.
+	- `src/services/tauri-api.ts`: added/used wrappers `getTransactionsAggregateByCategory`, `getTransactionsAggregateByDate`, and `seedDevData` so the frontend calls the Tauri backend in full runtime; in non-Tauri dev these calls fall back to empty/mocked behavior as before.
+- How to run and test locally (commands):
+
+```powershell
+# TypeScript checks and frontend tests
+npx tsc --noEmit
+npm test
+
+# Rust tests (backend)
+cd src-tauri
+cargo test
+
+# Manual dev run (frontend-only)
+npm run dev
+
+# Full runtime (requires Rust toolchain + Tauri)
+npm run tauri
+```
+- Suggested follow-ups:
+	- Add a small “Select all / Clear all” control for the legend to make bulk toggles easier.
+	- Consider implementing grouping server-side (Rust) for large datasets or when categories are normalized at the DB layer.
+	- Add an integration test that invokes the `seed_dev_data` Tauri command and asserts the returned aggregates (prevents regressions in aggregation shapes).
+- Reviewer handoff / TODOs:
+	- Run `npx tsc --noEmit`, `npm test`, and `cd src-tauri && cargo test`.
+	- Manually verify Dashboard flows:
+		- Navigate to `/dashboard`, click `Seed Dev Data` (dev mode), confirm charts populate.
+		- Confirm Pie slices are colored and legend buttons match those colors.
+		- Toggle legend entries and confirm pie slices and stacked bars hide/show consistently.
+		- Confirm stacked-bar Y axis labels show dollars (e.g., `210.00`) while tooltips show dollar-formatted values.
+		- Confirm identical display-name categories (e.g., multiple `Food` ids) are combined into a single legend entry and aggregate series.
+	- Capture and report any console errors or rendering anomalies (screenshot + console log preferred).
+
+---
+
 Run Locally — Checklist
 
 One-paragraph summary:
@@ -924,6 +1040,39 @@ Follow the project's normal PR flow: open `feature/transactions-crud` branch, pu
 	- Line-by-line explanation:
 		- `tsconfig.json`: added `"types": ["node", "vitest"]` so the compiler includes Vitest's ambient declarations; added `"allowJs": true` to allow test imports that include `.js` extension to resolve in the TypeScript build step.
 		- `vite.config.js`: added `test.setupFiles: ['tests/setupTests.ts']` so the localStorage shim runs before tests.
+
+	---
+
+	Change: Replace inline styles with CSS utility and component classes
+	- One-paragraph summary:
+		- Replaced several inline `style={{ ... }}` usages with shared CSS utility classes and component-level classes to improve maintainability and theming. Changes focused on toolbar, filters, chart legend buttons, and the app container; new utilities were added to `src/styles.css` for spacing, layout, and buttons.
+	- Line-by-line explanation:
+		- `src/styles.css`: added utility classes (`.mb-12`, `.mt-8`, `.ml-8`, `.gap-8`), layout helpers (`.row`, `.app-container`, `.center`), button styles (`.btn`, `.btn--toggle`, `.btn--muted`) and `.card` container class.
+		- `src/App.tsx`: removed inline padding/font and applied `app-container` and `mb-12` utilities.
+		- `src/components/TransactionFilters.tsx`: replaced inline flex container with `.row` and added `.btn` classes to action buttons.
+		- `src/components/VisualizationToolbar.tsx`: replaced toolbar margin with `.mb-12`, used `.row` for alignment, and applied `.btn` classes to chart toggle buttons.
+		- `src/components/PieChartView.tsx` & `src/components/StackedBarView.tsx`: applied `.btn`/`.btn--toggle` to legend/category toggles; retained inline dynamic background colors to preserve color mapping behavior.
+	- How to run and test locally (commands):
+
+	```powershell
+	# Type-check
+	npx tsc --noEmit
+
+	# Run tests
+	npm test
+
+	# Run dev server for visual verification
+	npm run dev
+	```
+	- Suggested follow-up learning items or references:
+		- Explore CSS utility approaches (Tailwind) vs component-scoped CSS modules for long-term strategy.
+		- Consider adopting CSS modules or CSS-in-JS for per-component styling if class name collisions become a concern.
+	- Implementation TODOs / Reviewer handoff:
+		- Run `npx tsc --noEmit` and `npm test` to confirm no regressions.
+		- Manually inspect `Transactions` and `Dashboard` pages under `npm run dev` to verify visuals.
+		- Continue converting remaining inline styles (~47 occurrences) incrementally, prioritizing shared controls and lists.
+		- Update tests that assert layout by style to assert class presence or ARIA/state instead.
+
 		- `tests/setupTests.ts`: new file providing a minimal `localStorage` implementation and a `beforeEach` hook that clears storage before every test.
 	- How to run and test locally (commands):
 

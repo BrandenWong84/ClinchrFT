@@ -151,7 +151,7 @@ export default function TransactionsPage() {
   return (
     <div>
       <h2>Transactions</h2>
-      <div style={{marginBottom: 12}}>
+      <div className="mb-12">
         <TransactionFilters
           startDate={startDate}
           endDate={endDate}
@@ -166,7 +166,7 @@ export default function TransactionsPage() {
           onApply={() => { setOffset(0); fetchTransactions({ start: startDate, end: endDate, accountId: selectedAccountId || undefined, categoryId: selectedCategoryId, limit, offset: 0 }) }}
           onClear={() => { setStartDate(undefined); setEndDate(undefined); setSelectedCategoryId(undefined); setOffset(0); fetchTransactions({ start: undefined, end: undefined, accountId: selectedAccountId || undefined, categoryId: undefined, limit, offset: 0 }) }}
         />
-          <div style={{marginTop:8}}>
+          <div className="mt-8">
             <button onClick={async () => {
               try {
                 let dest: string | undefined = undefined
@@ -214,19 +214,19 @@ export default function TransactionsPage() {
                 }
               } catch (e: any) { alert('Export failed: ' + String(e)) }
             }}>Export</button>
-            <label style={{marginLeft:8}}>
+            <label className="ml-8">
               <input type="checkbox" checked={showApiDebug} onChange={e => { setShowApiDebug(e.target.checked); if (!e.target.checked) setDebugApiInfo(null) }} /> Show debug
             </label>
-            <button onClick={() => setShowImport(true)} style={{marginLeft:8}}>Import</button>
+            <button className="btn ml-8" onClick={() => setShowImport(true)}>Import</button>
           </div>
           {showApiDebug && debugApiInfo && (
-            <div style={{marginTop:8, padding:8, background:'#fffbe6', border:'1px solid #ffd966'}}>
+            <div className="alert-debug">
               <strong>Debug: @tauri-apps/api</strong>
-              <pre style={{whiteSpace:'pre-wrap', margin:0}}>{debugApiInfo}</pre>
+              <pre className="pre-wrap">{debugApiInfo}</pre>
             </div>
           )}
 
-          <div style={{marginTop:8, display:'flex', gap:12, alignItems:'center'}}>
+          <div className="row mt-8">
           <label>
             Account:{' '}
             <select value={selectedAccountId} onChange={e => { setSelectedAccountId(e.target.value); localStorage.setItem(LAST_ACCOUNT_KEY, e.target.value); fetchTransactions({ accountId: e.target.value || undefined, limit, offset: 0 }) }}>
@@ -236,13 +236,13 @@ export default function TransactionsPage() {
               ))}
             </select>
           </label>
-          <button onClick={() => { setEditing(null); setShowForm(true) }}>Add Transaction</button>
+          <button className="btn" onClick={() => { setEditing(null); setShowForm(true) }}>Add Transaction</button>
         </div>
       </div>
 
       {loading ? <div>Loading...</div> : <>
         <TransactionList transactions={transactions} accountsMap={accountsMap} categoriesMap={categoriesMap} onEdit={(t)=>{setEditing(t); setShowForm(true)}} onDelete={handleDelete} />
-        <div style={{marginTop:8, display:'flex', gap:12, alignItems:'center'}}>
+        <div className="row mt-8">
           <button onClick={() => { const newOffset = Math.max(0, offset - limit); setOffset(newOffset); fetchTransactions({ offset: newOffset, limit }) }} disabled={offset === 0}>Prev</button>
           <div>Page {Math.floor(offset/limit) + 1} of {Math.max(1, Math.ceil(total/limit))} ({total} items)</div>
           <button onClick={() => { const newOffset = offset + limit; if (newOffset < total) { setOffset(newOffset); fetchTransactions({ offset: newOffset, limit }) } }} disabled={offset + limit >= total}>Next</button>
@@ -250,7 +250,7 @@ export default function TransactionsPage() {
       </>}
 
       {showForm && (
-        <div style={{border: '1px solid #ccc', padding: 12, marginTop:12}}>
+        <div className="card">
           <h3>{editing ? 'Edit' : 'Add'} Transaction</h3>
           <TransactionForm initial={editing || undefined} categories={categoriesList} selectedAccountId={selectedAccountId} onCancel={() => { setShowForm(false); setEditing(null) }} onSave={editing ? handleUpdate : handleCreate} />
         </div>
